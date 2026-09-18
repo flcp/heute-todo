@@ -30,6 +30,10 @@ var (
 	emptyStyle = lipgloss.NewStyle().Faint(true)
 
 	helpStyle = lipgloss.NewStyle().Faint(true)
+
+	insertStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("42"))
 )
 
 // View implements tea.Model.
@@ -55,13 +59,19 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · q quit"))
+	if m.mode == modeInsert {
+		b.WriteString(insertStyle.Render("Add"))
+		b.WriteByte(' ')
+		b.WriteString(m.editState.input.View())
+	} else {
+		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · o/O add · i/I edit · q quit"))
+	}
 	return b.String()
 }
 
 func (m Model) renderRow(i int, t todotxt.Todo) string {
 	prefix := "  "
-	if i == m.cursor {
+	if i == m.normalState.cursorPosition {
 		prefix = "> "
 	}
 
@@ -78,7 +88,7 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 	text := fmt.Sprintf("%s%s %s%s", prefix, check, badge, t.Description)
 
 	switch {
-	case i == m.cursor:
+	case i == m.normalState.cursorPosition:
 		return selectedStyle.Render(text)
 	case t.Done:
 		return doneStyle.Render(text)
