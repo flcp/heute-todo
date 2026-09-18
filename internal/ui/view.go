@@ -34,6 +34,10 @@ var (
 	insertStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("42"))
+
+	errStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("196"))
 )
 
 // View implements tea.Model.
@@ -64,7 +68,11 @@ func (m Model) View() string {
 		b.WriteByte(' ')
 		b.WriteString(m.editState.input.View())
 	} else {
-		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · o/O add · i/I edit · q quit"))
+		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · o/O add · i/I/a edit · q quit"))
+	}
+	if m.err != nil {
+		b.WriteByte('\n')
+		b.WriteString(errStyle.Render(fmt.Sprintf("save failed: %v", m.err)))
 	}
 	return b.String()
 }

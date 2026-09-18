@@ -3,11 +3,16 @@ package ui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/flcp/heute-todo/internal/store"
 	"github.com/flcp/heute-todo/internal/todotxt"
 )
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if saved, ok := msg.(savedMsg); ok {
+		m.err = saved.err
+		return m, nil
+	}
 	switch m.mode {
 	case modeInsert:
 		return m.updateInsertMode(msg)
@@ -44,7 +49,13 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.todos) == 0 {
 			return m, nil
 		}
-		cmd := m.enterEditMode(m.todos[m.normalState.cursorPosition])
+		cmd := m.enterEditMode(m.todos[m.normalState.cursorPosition], true)
+		return m, cmd
+	case "a":
+		if len(m.todos) == 0 {
+			return m, nil
+		}
+		cmd := m.enterEditMode(m.todos[m.normalState.cursorPosition], false)
 		return m, cmd
 	}
 	return m, nil
@@ -58,7 +69,8 @@ func (m Model) updateInsertMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			m.commit()
 			m.exitInsert()
-			return m, nil
+			cmd := m.saveCmd()
+			return m, cmd
 		case tea.KeyEsc:
 			m.exitInsert()
 			return m, nil
@@ -95,13 +107,17 @@ func (m *Model) enterAddMode(at int) tea.Cmd {
 	return m.editState.input.Focus()
 }
 
-// enterEditMode switches to insert mode to edit todo t, placing the input cursor at
-// the end of the line.
-func (m *Model) enterEditMode(t todotxt.Todo) tea.Cmd {
+// enterEditMode switches to insert mode to edit todo t. The input cursor starts
+// at the front of the line when cursorAtStart is true, otherwise at the end.
+func (m *Model) enterEditMode(t todotxt.Todo, cursorAtStart bool) tea.Cmd {
 	m.mode = modeInsert
 	m.editState.isAddingItem = false
 	m.editState.input.SetValue(t.String())
-	m.editState.input.CursorEnd()
+	if cursorAtStart {
+		m.editState.input.CursorStart()
+	} else {
+		m.editState.input.CursorEnd()
+	}
 	return m.editState.input.Focus()
 }
 
@@ -139,4 +155,18 @@ func (m *Model) exitInsert() {
 	m.mode = modeNormal
 	m.editState.input.Blur()
 	m.editState.input.Reset()
+}
+
+// savedMsg reports the result of an autosave.
+type savedMsg struct{ err error }
+
+// saveCmd persists the current todos to disk. It snapshots the slice so the
+// write runs safely off the update loop.
+func (m Model) saveCmd() tea.Cmd {
+	path := m.path
+	snapshot := make([]todotxt.Todo, len(m.todos))
+	copy(snapshot, m.todos)
+	return func() tea.Msg {
+		return savedMsg{err: store.Save(path, snapshot)}
+	}
 }

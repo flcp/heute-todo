@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -169,5 +172,59 @@ func TestBlankInsertIgnored(t *testing.T) {
 	}
 	if len(m.todos) != 1 {
 		t.Fatalf("len = %d, want 1 (blank must not add)", len(m.todos))
+	}
+}
+
+func TestAutosaveWritesFileOnAdd(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todo.txt")
+	m := testModel(0)
+	m.path = path
+
+	m = step(m, key("o"))
+	m = step(m, key("write the report"))
+
+	_, cmd := m.Update(enter())
+	if cmd == nil {
+		t.Fatal("expected a save command after commit")
+	}
+	msg := cmd()
+	saved, ok := msg.(savedMsg)
+	if !ok {
+		t.Fatalf("expected savedMsg, got %T", msg)
+	}
+	if saved.err != nil {
+		t.Fatalf("save failed: %v", saved.err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(data), "write the report") {
+		t.Fatalf("file = %q, want it to contain the new todo", string(data))
+	}
+}
+
+func TestEditWithAStartsAtEnd(t *testing.T) {
+	m := testModel(1) // "a"
+
+	m = step(m, key("a")) // edit, cursor at end
+	m = step(m, key("X")) // append -> "aX"
+	m = step(m, enter())
+
+	if m.todos[0].Description != "aX" {
+		t.Fatalf("desc = %q, want \"aX\"", m.todos[0].Description)
+	}
+}
+
+func TestEditWithIStartsAtFront(t *testing.T) {
+	m := testModel(1) // "a"
+
+	m = step(m, key("i")) // edit, cursor at front
+	m = step(m, key("X")) // prepend -> "Xa"
+	m = step(m, enter())
+
+	if m.todos[0].Description != "Xa" {
+		t.Fatalf("desc = %q, want \"Xa\"", m.todos[0].Description)
 	}
 }

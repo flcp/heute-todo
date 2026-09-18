@@ -26,6 +26,8 @@ type Model struct {
 
 	normalState normalState
 	editState   editState
+
+	err error // last autosave error, shown in the footer
 }
 
 // normalState holds state used while navigating in normal mode.
