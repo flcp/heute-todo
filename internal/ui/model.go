@@ -33,6 +33,7 @@ type Model struct {
 // normalState holds state used while navigating in normal mode.
 type normalState struct {
 	cursorPosition int
+	pendingDelete  bool // armed by the first d of a dd delete
 }
 
 // editState holds state used while adding or editing a todo in insert mode.

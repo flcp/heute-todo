@@ -38,6 +38,10 @@ var (
 	errStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("196"))
+
+	deleteStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("208"))
 )
 
 // View implements tea.Model.
@@ -63,12 +67,15 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	if m.mode == modeInsert {
+	switch {
+	case m.mode == modeInsert:
 		b.WriteString(insertStyle.Render("Add"))
 		b.WriteByte(' ')
 		b.WriteString(m.editState.input.View())
-	} else {
-		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · q quit"))
+	case m.normalState.pendingDelete:
+		b.WriteString(deleteStyle.Render("delete? press d to confirm, esc to cancel"))
+	default:
+		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit"))
 	}
 	if m.err != nil {
 		b.WriteByte('\n')

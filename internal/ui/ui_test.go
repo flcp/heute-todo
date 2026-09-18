@@ -246,3 +246,55 @@ func TestToggleDoneMarksAndUnmarks(t *testing.T) {
 		t.Fatalf("space again should clear done and date: %+v", m.todos[0])
 	}
 }
+
+func TestDeleteWithDDRemovesSelected(t *testing.T) {
+	m := testModel(2) // a, b
+
+	m = step(m, key("d"))
+	if !m.normalState.pendingDelete {
+		t.Fatal("first d should arm pending delete")
+	}
+	if len(m.todos) != 2 {
+		t.Fatal("first d must not delete yet")
+	}
+
+	next, cmd := m.Update(key("d"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("confirming delete should trigger an autosave")
+	}
+	if m.normalState.pendingDelete {
+		t.Fatal("pending delete should clear after confirm")
+	}
+	if len(m.todos) != 1 || m.todos[0].Description != "b" {
+		t.Fatalf("after dd, todos = %+v, want [b]", m.todos)
+	}
+}
+
+func TestDeletePendingCancelledByOtherKey(t *testing.T) {
+	m := testModel(2) // a, b
+
+	m = step(m, key("d"))
+	m = step(m, key("j")) // any other key cancels
+
+	if m.normalState.pendingDelete {
+		t.Fatal("another key should cancel pending delete")
+	}
+	if len(m.todos) != 2 {
+		t.Fatalf("nothing should be deleted, got len %d", len(m.todos))
+	}
+}
+
+func TestDeleteLastItemClampsCursor(t *testing.T) {
+	m := testModel(2)     // a, b
+	m = step(m, key("j")) // select b (index 1)
+	m = step(m, key("d"))
+	m = step(m, key("d"))
+
+	if len(m.todos) != 1 || m.todos[0].Description != "a" {
+		t.Fatalf("after dd, todos = %+v, want [a]", m.todos)
+	}
+	if m.normalState.cursorPosition != 0 {
+		t.Fatalf("cursor = %d, want clamped to 0", m.normalState.cursorPosition)
+	}
+}

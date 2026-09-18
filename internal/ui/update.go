@@ -19,6 +19,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modeInsert:
 		return m.updateInsertMode(msg)
 	default:
+		if m.normalState.pendingDelete {
+			return m.updateDeletePending(msg)
+		}
 		return m.updateNormalMode(msg)
 	}
 }
@@ -28,6 +31,7 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+
 	switch key.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
@@ -65,6 +69,11 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.toggleDone()
 		return m, cmd
+	case "d":
+		if len(m.todos) > 0 {
+			m.normalState.pendingDelete = true
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -88,6 +97,25 @@ func (m Model) updateInsertMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.editState.input, cmd = m.editState.input.Update(msg)
 	return m, cmd
+}
+
+// updateDeletePending handles the second keystroke of a dd delete: d confirms,
+// ctrl+c quits, and any other key cancels.
+func (m Model) updateDeletePending(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "d":
+		cmd := m.deleteSelected()
+		return m, cmd
+	case "ctrl+c":
+		return m, tea.Quit
+	default:
+		m.normalState.pendingDelete = false
+		return m, nil
+	}
 }
 
 // moveCursorRelative shifts the cursor by delta, clamped to the list bounds.
@@ -140,6 +168,21 @@ func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
 func (m *Model) toggleDone() tea.Cmd {
 	i := m.normalState.cursorPosition
 	m.todos[i] = m.todos[i].Toggled(time.Now())
+	return m.saveCmd()
+}
+
+// deleteSelected removes the todo under the cursor, clamps the cursor to the new
+// bounds, and persists the change.
+func (m *Model) deleteSelected() tea.Cmd {
+	m.normalState.pendingDelete = false
+	i := m.normalState.cursorPosition
+	m.todos = append(m.todos[:i], m.todos[i+1:]...)
+	if last := len(m.todos) - 1; m.normalState.cursorPosition > last {
+		m.normalState.cursorPosition = last
+	}
+	if m.normalState.cursorPosition < 0 {
+		m.normalState.cursorPosition = 0
+	}
 	return m.saveCmd()
 }
 
