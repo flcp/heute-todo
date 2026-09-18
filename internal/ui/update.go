@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/flcp/heute-todo/internal/store"
@@ -40,22 +42,28 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.normalState.cursorPosition = len(m.todos) - 1
 		}
 	case "o":
-		cmd := m.enterAddMode(m.normalState.cursorPosition + 1)
+		cmd := m.enterAddMode(true)
 		return m, cmd
 	case "O":
-		cmd := m.enterAddMode(m.normalState.cursorPosition)
+		cmd := m.enterAddMode(false)
 		return m, cmd
 	case "i", "I":
 		if len(m.todos) == 0 {
 			return m, nil
 		}
-		cmd := m.enterEditMode(m.todos[m.normalState.cursorPosition], true)
+		cmd := m.enterEditMode(true)
 		return m, cmd
 	case "a":
 		if len(m.todos) == 0 {
 			return m, nil
 		}
-		cmd := m.enterEditMode(m.todos[m.normalState.cursorPosition], false)
+		cmd := m.enterEditMode(false)
+		return m, cmd
+	case " ":
+		if len(m.todos) == 0 {
+			return m, nil
+		}
+		cmd := m.toggleDone()
 		return m, cmd
 	}
 	return m, nil
@@ -97,9 +105,13 @@ func (m *Model) moveCursorRelative(delta int) {
 	}
 }
 
-// enterAddMode switches to insert mode to add a new todo, inserted at index at when
-// committed.
-func (m *Model) enterAddMode(at int) tea.Cmd {
+// enterAddMode switches to insert mode to add a new todo, placed below the
+// selected todo when below is true, otherwise above it.
+func (m *Model) enterAddMode(below bool) tea.Cmd {
+	at := m.normalState.cursorPosition
+	if below {
+		at++
+	}
 	m.mode = modeInsert
 	m.editState.isAddingItem = true
 	m.editState.insertAt = at
@@ -107,18 +119,28 @@ func (m *Model) enterAddMode(at int) tea.Cmd {
 	return m.editState.input.Focus()
 }
 
-// enterEditMode switches to insert mode to edit todo t. The input cursor starts
-// at the front of the line when cursorAtStart is true, otherwise at the end.
-func (m *Model) enterEditMode(t todotxt.Todo, cursorAtStart bool) tea.Cmd {
+// enterEditMode switches to insert mode to edit the selected todo. The input
+// cursor starts at the front of the line when cursorAtStart is true, otherwise
+// at the end.
+func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
 	m.mode = modeInsert
 	m.editState.isAddingItem = false
-	m.editState.input.SetValue(t.String())
+	currentTodo := m.todos[m.normalState.cursorPosition]
+	m.editState.input.SetValue(currentTodo.String())
 	if cursorAtStart {
 		m.editState.input.CursorStart()
 	} else {
 		m.editState.input.CursorEnd()
 	}
 	return m.editState.input.Focus()
+}
+
+// toggleDone flips the done state of the selected todo (stamping or clearing the
+// completion date) and persists the change.
+func (m *Model) toggleDone() tea.Cmd {
+	i := m.normalState.cursorPosition
+	m.todos[i] = m.todos[i].Toggled(time.Now())
+	return m.saveCmd()
 }
 
 // commit applies the input text as a new or edited todo. Blank input is ignored.

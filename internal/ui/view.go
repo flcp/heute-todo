@@ -68,7 +68,7 @@ func (m Model) View() string {
 		b.WriteByte(' ')
 		b.WriteString(m.editState.input.View())
 	} else {
-		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · o/O add · i/I/a edit · q quit"))
+		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · q quit"))
 	}
 	if m.err != nil {
 		b.WriteByte('\n')

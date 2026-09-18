@@ -228,3 +228,21 @@ func TestEditWithIStartsAtFront(t *testing.T) {
 		t.Fatalf("desc = %q, want \"Xa\"", m.todos[0].Description)
 	}
 }
+
+func TestToggleDoneMarksAndUnmarks(t *testing.T) {
+	m := testModel(1) // "a", not done
+
+	next, cmd := m.Update(key(" "))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("toggling should trigger an autosave")
+	}
+	if !m.todos[0].Done || m.todos[0].CompletedAt == nil {
+		t.Fatalf("space should mark done with a completion date: %+v", m.todos[0])
+	}
+
+	m = step(m, key(" "))
+	if m.todos[0].Done || m.todos[0].CompletedAt != nil {
+		t.Fatalf("space again should clear done and date: %+v", m.todos[0])
+	}
+}

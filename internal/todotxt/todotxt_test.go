@@ -123,6 +123,24 @@ func TestSerializeEmpty(t *testing.T) {
 	}
 }
 
+func TestToggled(t *testing.T) {
+	now := *date(t, "2026-09-18")
+	td := Todo{Description: "task"}
+
+	done := td.Toggled(now)
+	if !done.Done || done.CompletedAt == nil || !done.CompletedAt.Equal(now) {
+		t.Fatalf("toggled = %+v, want done with completion date %v", done, now)
+	}
+	if td.Done {
+		t.Error("Toggled must not mutate the receiver")
+	}
+
+	back := done.Toggled(now)
+	if back.Done || back.CompletedAt != nil {
+		t.Fatalf("toggled back = %+v, want not done and no completion date", back)
+	}
+}
+
 func TestSortByPriority(t *testing.T) {
 	todos := []Todo{
 		{Done: true, Description: "done"},

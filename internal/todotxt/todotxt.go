@@ -159,6 +159,18 @@ func (t Todo) String() string {
 	return b.String()
 }
 
+// Toggled returns a copy of t with its done state flipped. Completing stamps the
+// completion date with now; un-completing clears it.
+func (t Todo) Toggled(now time.Time) Todo {
+	t.Done = !t.Done
+	if t.Done {
+		t.CompletedAt = &now
+	} else {
+		t.CompletedAt = nil
+	}
+	return t
+}
+
 // ToTodoList parses a full todo.txt file body into a slice of Todos,
 // skipping blank lines.
 func ToTodoList(text string) []Todo {
