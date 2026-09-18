@@ -1,4 +1,3 @@
-package store
 // Package store loads and saves the todo.txt file from disk.
 package store
 
