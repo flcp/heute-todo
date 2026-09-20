@@ -71,6 +71,7 @@ type Styles struct {
 	HeaderName  lipgloss.Style
 	HeaderPath  lipgloss.Style
 	HeaderCount lipgloss.Style
+	CommandLine lipgloss.Style
 	TodoPanel   lipgloss.Style
 	SidePanel   lipgloss.Style
 	Separator   lipgloss.Style
@@ -98,7 +99,8 @@ func buildStylesWithPalette(p Palette) Styles {
 			Bold(true).
 			Align(lipgloss.Right).
 			Foreground(p.Success),
-		TodoPanel: lipgloss.NewStyle().PaddingRight(2),
+		CommandLine: headerBase,
+		TodoPanel:   lipgloss.NewStyle().PaddingRight(2),
 		SidePanel: lipgloss.NewStyle().PaddingLeft(2).Foreground(p.Info),
 		Separator: lipgloss.NewStyle().Foreground(p.Border),
 		Selected: lipgloss.NewStyle().

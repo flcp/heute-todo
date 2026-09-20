@@ -20,10 +20,11 @@ const (
 
 // Model is the root Bubble Tea model.
 type Model struct {
-	path  string
-	todos []todotxt.Todo
-	mode  mode
-	width int // terminal width, used to lay out the header panels
+	path   string
+	todos  []todotxt.Todo
+	mode   mode
+	width  int // terminal width, used to lay out the header panels
+	height int // terminal height, used to pin the command line to the bottom
 
 	normalState normalState
 	editState   editState

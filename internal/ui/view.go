@@ -12,29 +12,42 @@ import (
 
 // View implements tea.Model.
 func (m Model) View() string {
-	var b strings.Builder
+	top := m.renderHeader() + "\n\n" + m.renderBody()
+	if m.err != nil {
+		top += "\n\n" + m.styles.Err.Render(fmt.Sprintf("save failed: %v", m.err))
+	}
 
-	b.WriteString(m.renderHeader())
-	b.WriteString("\n\n")
+	cmd := m.renderCommandLine()
 
-	b.WriteString(m.renderBody())
-	b.WriteString("\n\n")
+	// Pin the command line to the very bottom by padding the space between it
+	// and the content above when we know the terminal height.
+	gap := "\n\n"
+	if m.height > 0 {
+		if n := m.height - lipgloss.Height(top) - lipgloss.Height(cmd) + 1; n > 2 {
+			gap = strings.Repeat("\n", n)
+		}
+	}
+	return top + gap + cmd
+}
 
+// renderCommandLine renders the footer prompt as a full-width bordered panel,
+// matching the header style.
+func (m Model) renderCommandLine() string {
+	var content string
 	switch {
 	case m.mode == modeInsert:
-		b.WriteString(m.styles.Insert.Render("Add"))
-		b.WriteByte(' ')
-		b.WriteString(m.editState.input.View())
+		content = m.styles.Insert.Render("Add") + " " + m.editState.input.View()
 	case m.normalState.pendingDelete:
-		b.WriteString(m.styles.Delete.Render("delete? press d to confirm, esc to cancel"))
+		content = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
-		b.WriteString(m.styles.Help.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit"))
+		content = m.styles.Help.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit")
 	}
-	if m.err != nil {
-		b.WriteByte('\n')
-		b.WriteString(m.styles.Err.Render(fmt.Sprintf("save failed: %v", m.err)))
+
+	width := m.width
+	if width <= 0 {
+		width = 80
 	}
-	return b.String()
+	return m.styles.CommandLine.Width(width - 2).Render(content)
 }
 
 // loremIpsum fills the side panel with placeholder copy.
