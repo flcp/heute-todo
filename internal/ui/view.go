@@ -90,24 +90,34 @@ func (m Model) detailField(label, value string) string {
 // detailTitle returns the task description with its +projects, @contexts and
 // key:value tags stripped, leaving just the human-readable title.
 func detailTitle(t todotxt.Todo) string {
-	var words []string
-	for _, tok := range strings.Fields(t.Description) {
-		switch {
-		case len(tok) > 1 && (tok[0] == '+' || tok[0] == '@'):
-			continue
-		case strings.ContainsRune(tok, ':') && !strings.ContainsAny(tok, " "):
-			// Drop key:value tags (e.g. due:2026-09-20).
-			if i := strings.IndexByte(tok, ':'); i > 0 && i < len(tok)-1 {
-				continue
-			}
-		}
-		words = append(words, tok)
-	}
-	title := strings.Join(words, " ")
+	title, _ := splitDescription(t.Description)
 	if title == "" {
 		return "(untitled)"
 	}
 	return title
+}
+
+// splitDescription separates a raw todo description into its human-readable
+// title and the trailing metadata (+projects, @contexts and key:value tags),
+// each with the original token order preserved.
+func splitDescription(desc string) (title, meta string) {
+	var titleWords, metaWords []string
+	for _, tok := range strings.Fields(desc) {
+		switch {
+		case len(tok) > 1 && (tok[0] == '+' || tok[0] == '@'):
+			metaWords = append(metaWords, tok)
+		case strings.ContainsRune(tok, ':') && !strings.ContainsAny(tok, " "):
+			// Drop key:value tags (e.g. due:2026-09-20).
+			if i := strings.IndexByte(tok, ':'); i > 0 && i < len(tok)-1 {
+				metaWords = append(metaWords, tok)
+				continue
+			}
+			titleWords = append(titleWords, tok)
+		default:
+			titleWords = append(titleWords, tok)
+		}
+	}
+	return strings.Join(titleWords, " "), strings.Join(metaWords, " ")
 }
 
 // formatDue renders a due date with a relative countdown, e.g.
@@ -248,31 +258,46 @@ func truncateLeft(s string, max int) string {
 }
 
 func (m Model) renderRow(i int, t todotxt.Todo) string {
-	prefix := "  "
-	if i == m.normalState.cursorPosition {
-		prefix = "> "
-	}
-
-	check := "[ ]"
+	icon := "○"
 	if t.Done {
-		check = "[x]"
+		icon = "✓"
 	}
 
-	var badge string
-	if t.Priority >= 'A' && t.Priority <= 'Z' {
-		badge = fmt.Sprintf("(%c) ", t.Priority)
+	title, meta := splitDescription(t.Description)
+	if title == "" {
+		title = t.Description
 	}
 
-	text := fmt.Sprintf("%s%s %s%s", prefix, check, badge, t.Description)
+	hasPriority := t.Priority >= 'A' && t.Priority <= 'Z'
 
-	switch {
-	case i == m.normalState.cursorPosition:
-		return m.styles.Selected.Render(text)
-	case t.Done:
-		return m.styles.Done.Render(text)
-	case badge != "":
-		return m.styles.Priority.Render(text)
-	default:
-		return text
+	// The selected row is highlighted as a whole, so it drops the per-segment
+	// coloring and renders one plain line under the selection style.
+	if i == m.normalState.cursorPosition {
+		parts := []string{icon}
+		if hasPriority {
+			parts = append(parts, string(t.Priority))
+		}
+		parts = append(parts, title)
+		if meta != "" {
+			parts = append(parts, meta)
+		}
+		return m.styles.Selected.Render(strings.Join(parts, " "))
 	}
+
+	// Everything but the title is faint (border-colored); the priority letter
+	// is the one exception, color-coded by urgency.
+	parts := []string{m.styles.RowIcon.Render(icon)}
+	if hasPriority {
+		parts = append(parts, priorityStyle(t.Priority).Render(string(t.Priority)))
+	}
+
+	if t.Done {
+		parts = append(parts, m.styles.Done.Render(title))
+	} else {
+		parts = append(parts, title)
+	}
+	if meta != "" {
+		parts = append(parts, m.styles.RowMeta.Render(meta))
+	}
+	return strings.Join(parts, " ")
 }

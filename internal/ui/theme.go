@@ -79,12 +79,37 @@ type Styles struct {
 	DetailLabel lipgloss.Style
 	Selected    lipgloss.Style
 	Done        lipgloss.Style
-	Priority    lipgloss.Style
+	RowIcon     lipgloss.Style
+	RowMeta     lipgloss.Style
 	Empty       lipgloss.Style
 	Help        lipgloss.Style
 	Insert      lipgloss.Style
 	Err         lipgloss.Style
 	Delete      lipgloss.Style
+}
+
+// priorityReds shades priority letters from deep red (A, most urgent) to a
+// progressively lighter red as priority decreases. Letters past the last entry
+// reuse the lightest shade.
+var priorityReds = []lipgloss.Color{
+	"#D01F2D", // A
+	"#E14650",
+	"#EA6E76",
+	"#F0949A",
+	"#F5B8BC",
+}
+
+// priorityStyle returns the style for a single priority letter, color-coded by
+// urgency. Non-priority bytes fall back to the lightest shade.
+func priorityStyle(p byte) lipgloss.Style {
+	i := 0
+	if p >= 'A' && p <= 'Z' {
+		i = int(p - 'A')
+	}
+	if i >= len(priorityReds) {
+		i = len(priorityReds) - 1
+	}
+	return lipgloss.NewStyle().Bold(true).Foreground(priorityReds[i])
 }
 
 // buildStylesWithPalette builds the view's styles from a palette.
@@ -112,7 +137,8 @@ func buildStylesWithPalette(p Palette) Styles {
 			Foreground(p.SelectionFg).
 			Background(p.SelectionBg),
 		Done:     lipgloss.NewStyle().Faint(true).Strikethrough(true),
-		Priority: lipgloss.NewStyle().Bold(true).Foreground(p.Warning),
+		RowIcon:  lipgloss.NewStyle().Foreground(p.Border),
+		RowMeta:  lipgloss.NewStyle().Foreground(p.Border),
 		Empty:    lipgloss.NewStyle().Faint(true),
 		Help:     lipgloss.NewStyle().Faint(true),
 		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
