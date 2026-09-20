@@ -10,54 +10,6 @@ import (
 	"github.com/flcp/heute-todo/internal/todotxt"
 )
 
-var (
-	headerBase = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1)
-
-	headerNameStyle = headerBase.
-			Bold(true).
-			Foreground(lipgloss.Color("205"))
-
-	headerPathStyle = headerBase.
-			Foreground(lipgloss.Color("111"))
-
-	headerCountStyle = headerBase.
-				Bold(true).
-				Align(lipgloss.Right).
-				Foreground(lipgloss.Color("42"))
-
-	selectedStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("231")).
-			Background(lipgloss.Color("57"))
-
-	doneStyle = lipgloss.NewStyle().
-			Faint(true).
-			Strikethrough(true)
-
-	priorityStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("214"))
-
-	emptyStyle = lipgloss.NewStyle().Faint(true)
-
-	helpStyle = lipgloss.NewStyle().Faint(true)
-
-	insertStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("42"))
-
-	errStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("196"))
-
-	deleteStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("208"))
-)
-
 // View implements tea.Model.
 func (m Model) View() string {
 	var b strings.Builder
@@ -66,7 +18,7 @@ func (m Model) View() string {
 	b.WriteString("\n\n")
 
 	if len(m.todos) == 0 {
-		b.WriteString(emptyStyle.Render("  (no tasks yet)"))
+		b.WriteString(m.styles.Empty.Render("  (no tasks yet)"))
 		b.WriteByte('\n')
 	}
 	for i, t := range m.todos {
@@ -77,17 +29,17 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	switch {
 	case m.mode == modeInsert:
-		b.WriteString(insertStyle.Render("Add"))
+		b.WriteString(m.styles.Insert.Render("Add"))
 		b.WriteByte(' ')
 		b.WriteString(m.editState.input.View())
 	case m.normalState.pendingDelete:
-		b.WriteString(deleteStyle.Render("delete? press d to confirm, esc to cancel"))
+		b.WriteString(m.styles.Delete.Render("delete? press d to confirm, esc to cancel"))
 	default:
-		b.WriteString(helpStyle.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit"))
+		b.WriteString(m.styles.Help.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit"))
 	}
 	if m.err != nil {
 		b.WriteByte('\n')
-		b.WriteString(errStyle.Render(fmt.Sprintf("save failed: %v", m.err)))
+		b.WriteString(m.styles.Err.Render(fmt.Sprintf("save failed: %v", m.err)))
 	}
 	return b.String()
 }
@@ -120,9 +72,9 @@ func (m Model) renderHeader() string {
 		midW = 8
 	}
 
-	left := headerNameStyle.Width(leftW).Render(name)
-	mid := headerPathStyle.Width(midW).Render(truncateLeft(m.absPath(), midW-2))
-	right := headerCountStyle.Width(rightW).Render(openText)
+	left := m.styles.HeaderName.Width(leftW).Render(name)
+	mid := m.styles.HeaderPath.Width(midW).Render(truncateLeft(m.absPath(), midW-2))
+	right := m.styles.HeaderCount.Width(rightW).Render(openText)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, mid, right)
 }
@@ -174,11 +126,11 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 
 	switch {
 	case i == m.normalState.cursorPosition:
-		return selectedStyle.Render(text)
+		return m.styles.Selected.Render(text)
 	case t.Done:
-		return doneStyle.Render(text)
+		return m.styles.Done.Render(text)
 	case badge != "":
-		return priorityStyle.Render(text)
+		return m.styles.Priority.Render(text)
 	default:
 		return text
 	}

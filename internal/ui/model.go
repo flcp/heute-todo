@@ -28,6 +28,8 @@ type Model struct {
 	normalState normalState
 	editState   editState
 
+	styles Styles // active theme's rendered styles
+
 	err error // last autosave error, shown in the footer
 }
 
@@ -55,7 +57,15 @@ func New(path string) (Model, error) {
 		path:      path,
 		todos:     todos,
 		editState: editState{input: newInput()},
+		styles:    newStyles(paletteFor(DefaultTheme)),
 	}, nil
+}
+
+// WithTheme returns a copy of the model styled with the named theme, falling
+// back to Nord when the name is not registered.
+func (m Model) WithTheme(name string) Model {
+	m.styles = newStyles(paletteFor(name))
+	return m
 }
 
 // newInput builds the textinput used to add and edit todos in insert mode.
