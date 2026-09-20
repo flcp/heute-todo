@@ -66,11 +66,14 @@ func paletteFor(name string) Palette {
 }
 
 // Styles holds every lipgloss style the view renders with, derived from a
-// Palette by newStyles.
+// Palette by buildStylesWithPalette.
 type Styles struct {
 	HeaderName  lipgloss.Style
 	HeaderPath  lipgloss.Style
 	HeaderCount lipgloss.Style
+	TodoPanel   lipgloss.Style
+	SidePanel   lipgloss.Style
+	Separator   lipgloss.Style
 	Selected    lipgloss.Style
 	Done        lipgloss.Style
 	Priority    lipgloss.Style
@@ -81,8 +84,8 @@ type Styles struct {
 	Delete      lipgloss.Style
 }
 
-// newStyles builds the view's styles from a palette.
-func newStyles(p Palette) Styles {
+// buildStylesWithPalette builds the view's styles from a palette.
+func buildStylesWithPalette(p Palette) Styles {
 	headerBase := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(p.Border).
@@ -95,6 +98,9 @@ func newStyles(p Palette) Styles {
 			Bold(true).
 			Align(lipgloss.Right).
 			Foreground(p.Success),
+		TodoPanel: lipgloss.NewStyle().PaddingRight(2),
+		SidePanel: lipgloss.NewStyle().PaddingLeft(2).Foreground(p.Info),
+		Separator: lipgloss.NewStyle().Foreground(p.Border),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(p.SelectionFg).

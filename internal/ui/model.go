@@ -57,14 +57,14 @@ func New(path string) (Model, error) {
 		path:      path,
 		todos:     todos,
 		editState: editState{input: newInput()},
-		styles:    newStyles(paletteFor(DefaultTheme)),
+		styles:    buildStylesWithPalette(paletteFor(DefaultTheme)),
 	}, nil
 }
 
 // WithTheme returns a copy of the model styled with the named theme, falling
 // back to Nord when the name is not registered.
 func (m Model) WithTheme(name string) Model {
-	m.styles = newStyles(paletteFor(name))
+	m.styles = buildStylesWithPalette(paletteFor(name))
 	return m
 }
 
