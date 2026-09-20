@@ -63,27 +63,38 @@ func (m Model) renderDetail() string {
 	b.WriteString(m.styles.DetailTitle.Render(detailTitle(t)))
 	b.WriteString("\n\n")
 
-	priority := "—"
+	priority := " "
 	if t.Priority >= 'A' && t.Priority <= 'Z' {
 		priority = string(t.Priority)
 	}
 	b.WriteString(m.detailField("Priority", priority))
 
+	projects := " "
 	if len(t.Projects) > 0 {
-		b.WriteString(m.detailField("Project", strings.Join(t.Projects, ", ")))
+		projects = strings.Join(t.Projects, ", ")
 	}
+	b.WriteString(m.detailField("Project", projects))
+
+	contexts := " "
 	if len(t.Contexts) > 0 {
-		b.WriteString(m.detailField("Context", strings.Join(t.Contexts, ", ")))
+		contexts = strings.Join(t.Contexts, ", ")
 	}
-	if due, ok := t.Tags["due"]; ok {
-		b.WriteString(m.detailField("Due date", formatDue(due, time.Now())))
+	b.WriteString(m.detailField("Context", contexts))
+
+	due := " "
+	if d, ok := t.Tags["due"]; ok {
+		due = formatDue(d, time.Now())
 	}
+	b.WriteString(m.detailField("Due date", due))
 
 	return strings.TrimRight(b.String(), "\n")
 }
 
 // detailField renders a single "Label: value" line, terminated by a newline.
 func (m Model) detailField(label, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return m.styles.Empty.Render(label+": —") + "\n"
+	}
 	return m.styles.DetailLabel.Render(label+":") + " " + value + "\n"
 }
 
