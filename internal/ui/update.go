@@ -74,6 +74,16 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.toggleDone()
 		return m, cmd
+	case "J":
+		if len(m.todos) > 0 {
+			cmd := m.moveSelected(1)
+			return m, cmd
+		}
+	case "K":
+		if len(m.todos) > 0 {
+			cmd := m.moveSelected(-1)
+			return m, cmd
+		}
 	case "d":
 		if len(m.todos) > 0 {
 			m.normalState.pendingDelete = true
@@ -136,6 +146,19 @@ func (m *Model) moveCursorRelative(delta int) {
 	if last := len(m.todos) - 1; m.normalState.cursorPosition > last {
 		m.normalState.cursorPosition = last
 	}
+}
+
+// moveSelected swaps the selected todo with its neighbor in direction delta
+// (+1 = down, -1 = up), keeping the cursor on the moved item, and persists.
+func (m *Model) moveSelected(delta int) tea.Cmd {
+	i := m.normalState.cursorPosition
+	j := i + delta
+	if j < 0 || j >= len(m.todos) {
+		return nil
+	}
+	m.todos[i], m.todos[j] = m.todos[j], m.todos[i]
+	m.normalState.cursorPosition = j
+	return m.saveCmd()
 }
 
 // enterAddMode switches to insert mode to add a new todo, placed below the

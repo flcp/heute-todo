@@ -41,7 +41,7 @@ func (m Model) renderCommandLine() string {
 	case m.normalState.pendingDelete:
 		content = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
-		content = m.styles.Help.Render("j/k move · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit")
+		content = m.styles.Help.Render("j/k move · J/K reorder · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit")
 	}
 
 	width := m.width
