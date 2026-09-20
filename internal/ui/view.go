@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -50,10 +51,88 @@ func (m Model) renderCommandLine() string {
 	return m.styles.CommandLine.Width(width - 2).Render(content)
 }
 
-// loremIpsum fills the side panel with placeholder copy.
-const loremIpsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
-	"Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " +
-	"Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
+// renderDetail renders the side panel: a detail view of the todo currently
+// under the cursor, or a hint when the list is empty.
+func (m Model) renderDetail() string {
+	if len(m.todos) == 0 || m.normalState.cursorPosition >= len(m.todos) {
+		return m.styles.Empty.Render("(no task selected)")
+	}
+	t := m.todos[m.normalState.cursorPosition]
+
+	var b strings.Builder
+	b.WriteString(m.styles.DetailTitle.Render(detailTitle(t)))
+	b.WriteString("\n\n")
+
+	priority := "—"
+	if t.Priority >= 'A' && t.Priority <= 'Z' {
+		priority = string(t.Priority)
+	}
+	b.WriteString(m.detailField("Priority", priority))
+
+	if len(t.Projects) > 0 {
+		b.WriteString(m.detailField("Project", strings.Join(t.Projects, ", ")))
+	}
+	if len(t.Contexts) > 0 {
+		b.WriteString(m.detailField("Context", strings.Join(t.Contexts, ", ")))
+	}
+	if due, ok := t.Tags["due"]; ok {
+		b.WriteString(m.detailField("Due date", formatDue(due, time.Now())))
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// detailField renders a single "Label: value" line, terminated by a newline.
+func (m Model) detailField(label, value string) string {
+	return m.styles.DetailLabel.Render(label+":") + " " + value + "\n"
+}
+
+// detailTitle returns the task description with its +projects, @contexts and
+// key:value tags stripped, leaving just the human-readable title.
+func detailTitle(t todotxt.Todo) string {
+	var words []string
+	for _, tok := range strings.Fields(t.Description) {
+		switch {
+		case len(tok) > 1 && (tok[0] == '+' || tok[0] == '@'):
+			continue
+		case strings.ContainsRune(tok, ':') && !strings.ContainsAny(tok, " "):
+			// Drop key:value tags (e.g. due:2026-09-20).
+			if i := strings.IndexByte(tok, ':'); i > 0 && i < len(tok)-1 {
+				continue
+			}
+		}
+		words = append(words, tok)
+	}
+	title := strings.Join(words, " ")
+	if title == "" {
+		return "(untitled)"
+	}
+	return title
+}
+
+// formatDue renders a due date with a relative countdown, e.g.
+// "2026-09-20 (21d remaining)".
+func formatDue(due string, now time.Time) string {
+	d, err := time.Parse(todotxt.DateLayout, due)
+	if err != nil {
+		return due
+	}
+	// Compare on date boundaries, ignoring the time of day.
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	target := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+	days := int(target.Sub(today).Hours() / 24)
+
+	var rel string
+	switch {
+	case days > 0:
+		rel = fmt.Sprintf("%dd remaining", days)
+	case days == 0:
+		rel = "today"
+	default:
+		rel = fmt.Sprintf("%dd overdue", -days)
+	}
+	return fmt.Sprintf("%s (%s)", due, rel)
+}
 
 // renderBody lays out the main area as two equal halves separated by a vertical
 // rule: the todo list on the left and an info panel on the right.
@@ -88,8 +167,10 @@ func (m Model) renderBody() string {
 	todosPanel := m.styles.TodoPanel.Width(leftW)
 	sidePanel := m.styles.SidePanel.Width(rightW)
 
+	detail := m.renderDetail()
+
 	left := todosPanel.Render(list.String())
-	right := sidePanel.Render(loremIpsum)
+	right := sidePanel.Render(detail)
 
 	// Match heights so the separator spans the taller half.
 	h := lipgloss.Height(left)
@@ -98,7 +179,7 @@ func (m Model) renderBody() string {
 	}
 
 	left = todosPanel.Height(h).Render(list.String())
-	right = sidePanel.Height(h).Render(loremIpsum)
+	right = sidePanel.Height(h).Render(detail)
 	sep := m.styles.Separator.Render(strings.TrimSuffix(strings.Repeat("│\n", h), "\n"))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, sep, right)

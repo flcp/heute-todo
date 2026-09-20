@@ -75,6 +75,8 @@ type Styles struct {
 	TodoPanel   lipgloss.Style
 	SidePanel   lipgloss.Style
 	Separator   lipgloss.Style
+	DetailTitle lipgloss.Style
+	DetailLabel lipgloss.Style
 	Selected    lipgloss.Style
 	Done        lipgloss.Style
 	Priority    lipgloss.Style
@@ -103,6 +105,8 @@ func buildStylesWithPalette(p Palette) Styles {
 		TodoPanel:   lipgloss.NewStyle().PaddingRight(2),
 		SidePanel: lipgloss.NewStyle().PaddingLeft(2).Foreground(p.Info),
 		Separator: lipgloss.NewStyle().Foreground(p.Border),
+		DetailTitle: lipgloss.NewStyle().Bold(true).Foreground(p.Accent),
+		DetailLabel: lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(p.SelectionFg).
