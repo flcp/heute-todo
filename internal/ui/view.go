@@ -276,6 +276,8 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 		parts := []string{icon}
 		if hasPriority {
 			parts = append(parts, string(t.Priority))
+		} else {
+			parts = append(parts, " ")
 		}
 		parts = append(parts, title)
 		if meta != "" {
@@ -288,7 +290,13 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 	// is the one exception, color-coded by urgency.
 	parts := []string{m.styles.RowIcon.Render(icon)}
 	if hasPriority {
-		parts = append(parts, priorityStyle(t.Priority).Render(string(t.Priority)))
+		idx := int(t.Priority-'A')
+		if idx >= len(m.styles.Priority) {
+			idx = len(m.styles.Priority) - 1
+		}
+		parts = append(parts, m.styles.Priority[idx].Render(string(t.Priority)))
+	} else {
+		parts = append(parts, " ")
 	}
 
 	if t.Done {

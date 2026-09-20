@@ -6,16 +6,17 @@ import "github.com/charmbracelet/lipgloss"
 // from these colors, so a palette is all a theme needs to define. Register a
 // new theme by adding a Palette to Themes.
 type Palette struct {
-	Name        string
-	Accent      lipgloss.Color // app name and other primary highlights
-	Info        lipgloss.Color // the todo file path
-	Success     lipgloss.Color // open-task count and the add prompt
-	Warning     lipgloss.Color // priority badges
-	Error       lipgloss.Color // save-failure messages
-	Danger      lipgloss.Color // delete confirmation
-	Border      lipgloss.Color // header panel borders
-	SelectionFg lipgloss.Color // selected row foreground
-	SelectionBg lipgloss.Color // selected row background
+	Name           string
+	Accent         lipgloss.Color   // app name and other primary highlights
+	Info           lipgloss.Color   // the todo file path
+	Success        lipgloss.Color   // open-task count and the add prompt
+	Warning        lipgloss.Color   // priority badges
+	Error          lipgloss.Color   // save-failure messages
+	Danger         lipgloss.Color   // delete confirmation
+	Border         lipgloss.Color   // header panel borders
+	SelectionFg    lipgloss.Color   // selected row foreground
+	SelectionBg    lipgloss.Color   // selected row background
+	PriorityColors []lipgloss.Color // A, B, C, … priority letter colors
 }
 
 // Nord is the Nord palette (https://www.nordtheme.com): cool, low-contrast
@@ -31,6 +32,13 @@ var Nord = Palette{
 	Border:      lipgloss.Color("#4C566A"),
 	SelectionFg: lipgloss.Color("#ECEFF4"),
 	SelectionBg: lipgloss.Color("#5E81AC"),
+	PriorityColors: []lipgloss.Color{
+		"#BF616A", // A – aurora red
+		"#D08770", // B – aurora orange
+		"#EBCB8B", // C – aurora yellow
+		"#A3BE8C", // D – aurora green
+		"#B48EAD", // E+ – aurora purple
+	},
 }
 
 // Default is the original 256-color palette, kept as a fallback theme.
@@ -45,6 +53,13 @@ var Default = Palette{
 	Border:      lipgloss.Color("240"),
 	SelectionFg: lipgloss.Color("231"),
 	SelectionBg: lipgloss.Color("57"),
+	PriorityColors: []lipgloss.Color{
+		"167", // A – red
+		"173", // B – salmon/orange
+		"179", // C – yellow
+		"107", // D – green
+		"139", // E+ – purple
+	},
 }
 
 // DefaultTheme names the palette used when none is selected.
@@ -86,30 +101,7 @@ type Styles struct {
 	Insert      lipgloss.Style
 	Err         lipgloss.Style
 	Delete      lipgloss.Style
-}
-
-// priorityReds shades priority letters from deep red (A, most urgent) to a
-// progressively lighter red as priority decreases. Letters past the last entry
-// reuse the lightest shade.
-var priorityReds = []lipgloss.Color{
-	"#D01F2D", // A
-	"#E14650",
-	"#EA6E76",
-	"#F0949A",
-	"#F5B8BC",
-}
-
-// priorityStyle returns the style for a single priority letter, color-coded by
-// urgency. Non-priority bytes fall back to the lightest shade.
-func priorityStyle(p byte) lipgloss.Style {
-	i := 0
-	if p >= 'A' && p <= 'Z' {
-		i = int(p - 'A')
-	}
-	if i >= len(priorityReds) {
-		i = len(priorityReds) - 1
-	}
-	return lipgloss.NewStyle().Bold(true).Foreground(priorityReds[i])
+	Priority    []lipgloss.Style // indexed by priority letter (A=0, B=1, …)
 }
 
 // buildStylesWithPalette builds the view's styles from a palette.
@@ -118,6 +110,11 @@ func buildStylesWithPalette(p Palette) Styles {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(p.Border).
 		Padding(0, 1)
+
+	priority := make([]lipgloss.Style, len(p.PriorityColors))
+	for i, c := range p.PriorityColors {
+		priority[i] = lipgloss.NewStyle().Foreground(c)
+	}
 
 	return Styles{
 		HeaderName: headerBase.Bold(true).Foreground(p.Accent),
@@ -144,5 +141,6 @@ func buildStylesWithPalette(p Palette) Styles {
 		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Err:      lipgloss.NewStyle().Bold(true).Foreground(p.Error),
 		Delete:   lipgloss.NewStyle().Bold(true).Foreground(p.Danger),
+		Priority: priority,
 	}
 }
