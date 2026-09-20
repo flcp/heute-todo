@@ -11,8 +11,12 @@ import (
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if saved, ok := msg.(savedMsg); ok {
-		m.err = saved.err
+	switch msg := msg.(type) {
+	case savedMsg:
+		m.err = msg.err
+		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 		return m, nil
 	}
 	switch m.mode {

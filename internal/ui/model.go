@@ -23,6 +23,7 @@ type Model struct {
 	path  string
 	todos []todotxt.Todo
 	mode  mode
+	width int // terminal width, used to lay out the header panels
 
 	normalState normalState
 	editState   editState
