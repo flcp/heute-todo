@@ -37,11 +37,16 @@ var Nord = Palette{
 	Done:        lipgloss.Color("#525A68"),
 	DoneIcon:    lipgloss.Color("#6B8F72"),
 	PriorityColors: []lipgloss.Color{
-		"#BF616A", // A – aurora red
-		"#D08770", // B – aurora orange
-		"#EBCB8B", // C – aurora yellow
-		"#A3BE8C", // D – aurora green
-		"#B48EAD", // E+ – aurora purple
+		"#BF616A", // 0 – red
+		"#CB6E65", // 1
+		"#D08770", // 2 – orange
+		"#DBA874", // 3
+		"#EBCB8B", // 4 – yellow
+		"#C5C989", // 5
+		"#A3BE8C", // 6 – green
+		"#8EAD7A", // 7
+		"#7A9C68", // 8
+		"#688B57", // 9
 	},
 }
 
@@ -60,11 +65,16 @@ var Default = Palette{
 	Done:        lipgloss.Color("238"),
 	DoneIcon:    lipgloss.Color("71"),
 	PriorityColors: []lipgloss.Color{
-		"167", // A – red
-		"173", // B – salmon/orange
-		"179", // C – yellow
-		"107", // D – green
-		"139", // E+ – purple
+		"160", // 0 – red
+		"202", // 1 – orange-red
+		"208", // 2 – orange
+		"214", // 3 – amber
+		"220", // 4 – yellow
+		"154", // 5 – yellow-green
+		"118", // 6 – bright green
+		"82",  // 7
+		"76",  // 8
+		"70",  // 9 – forest green
 	},
 }
 

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -294,7 +295,7 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 		} else {
 			prioritySlot := " "
 			if hasPriority {
-				prioritySlot = string(t.Priority)
+				prioritySlot = strconv.Itoa(priorityToDigit(t.Priority))
 			}
 			parts = []string{prioritySlot, title}
 		}
@@ -314,11 +315,8 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 
 	var parts []string
 	if hasPriority {
-		idx := int(t.Priority-'A')
-		if idx >= len(m.styles.Priority) {
-			idx = len(m.styles.Priority) - 1
-		}
-		parts = []string{m.styles.Priority[idx].Render(string(t.Priority))}
+		digit := priorityToDigit(t.Priority)
+		parts = []string{m.styles.Priority[digit].Render(strconv.Itoa(digit))}
 	} else {
 		parts = []string{" "}
 	}
@@ -327,4 +325,9 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 		parts = append(parts, m.styles.RowMeta.Render(meta))
 	}
 	return strings.Join(parts, " ")
+}
+
+// priorityToDigit maps a priority byte ('A'..'Z') to a 0–9 display digit.
+func priorityToDigit(p byte) int {
+	return int(p-'A') * 10 / 26
 }
