@@ -134,6 +134,7 @@ type Styles struct {
 	RowMeta     lipgloss.Style
 	Empty       lipgloss.Style
 	Help        lipgloss.Style
+	HelpKey     lipgloss.Style
 	Insert      lipgloss.Style
 	Err         lipgloss.Style
 	Delete      lipgloss.Style
@@ -177,7 +178,8 @@ func buildStylesWithPalette(p Palette) Styles {
 		RowIcon:  lipgloss.NewStyle().Foreground(p.Border),
 		RowMeta:  lipgloss.NewStyle().Foreground(p.Border),
 		Empty:    lipgloss.NewStyle().Faint(true),
-		Help:     lipgloss.NewStyle().Faint(true),
+		Help:     lipgloss.NewStyle().Foreground(p.Border),
+		HelpKey:  lipgloss.NewStyle().Faint(true),
 		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Err:      lipgloss.NewStyle().Bold(true).Foreground(p.Error),
 		Delete:   lipgloss.NewStyle().Bold(true).Foreground(p.Danger),

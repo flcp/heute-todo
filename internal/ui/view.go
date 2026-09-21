@@ -42,11 +42,29 @@ func (m Model) renderCommandLine() string {
 	case m.normalState.pendingDelete:
 		modeContent = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
-		var reorder string
-		if m.sort == sortFree {
-			reorder = " · J/K reorder"
+		nav := []string{
+			m.helpItem("j/k", "navigate"),
+			m.helpItem("g", "top"),
+			m.helpItem("G", "bottom"),
 		}
-		modeContent = m.styles.Help.Render("j/k move" + reorder + " · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · s sort · q quit")
+		if m.sort == sortFree {
+			nav = append(nav[:1], append([]string{m.helpItem("J/K", "move")}, nav[1:]...)...)
+		}
+		act := []string{
+			m.helpItem("⎵ ", "done"),
+			//m.helpItem("o/O", "add"),
+			m.helpItem("o", "add"),
+			// m.helpItem("i/I/a", "edit"),
+			m.helpItem("a", "edit"),
+			m.helpItem("d", "delete"),
+		}
+		misc := []string{
+			m.helpItem("s", "sort"),
+			m.helpItem("q", "quit"),
+		}
+		sep := m.styles.Help.Render("  ·  ")
+		join := func(items []string) string { return strings.Join(items, "  ") }
+		modeContent = join(nav) + sep + join(act) + sep + join(misc)
 	}
 
 	width := m.width
@@ -400,6 +418,12 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 		parts = append(parts, m.styles.RowMeta.Render(meta))
 	}
 	return strings.Join(parts, " ")
+}
+
+// helpItem renders a single shortcut entry: key in the dim HelpKey color,
+// action text in the faint Help style.
+func (m Model) helpItem(key, action string) string {
+	return m.styles.HelpKey.Render(key) + m.styles.Help.Render(":"+action)
 }
 
 // priorityToDigit maps a priority byte ('A'..'Z') to a 0–9 display digit.
