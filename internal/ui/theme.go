@@ -16,6 +16,8 @@ type Palette struct {
 	Border         lipgloss.Color   // header panel borders
 	SelectionFg    lipgloss.Color   // selected row foreground
 	SelectionBg    lipgloss.Color   // selected row background
+	Done           lipgloss.Color   // done task text
+	DoneIcon       lipgloss.Color   // checkmark color
 	PriorityColors []lipgloss.Color // A, B, C, … priority letter colors
 }
 
@@ -32,6 +34,8 @@ var Nord = Palette{
 	Border:      lipgloss.Color("#4C566A"),
 	SelectionFg: lipgloss.Color("#ECEFF4"),
 	SelectionBg: lipgloss.Color("#5E81AC"),
+	Done:        lipgloss.Color("#525A68"),
+	DoneIcon:    lipgloss.Color("#6B8F72"),
 	PriorityColors: []lipgloss.Color{
 		"#BF616A", // A – aurora red
 		"#D08770", // B – aurora orange
@@ -53,6 +57,8 @@ var Default = Palette{
 	Border:      lipgloss.Color("240"),
 	SelectionFg: lipgloss.Color("231"),
 	SelectionBg: lipgloss.Color("57"),
+	Done:        lipgloss.Color("238"),
+	DoneIcon:    lipgloss.Color("71"),
 	PriorityColors: []lipgloss.Color{
 		"167", // A – red
 		"173", // B – salmon/orange
@@ -94,6 +100,7 @@ type Styles struct {
 	DetailLabel lipgloss.Style
 	Selected    lipgloss.Style
 	Done        lipgloss.Style
+	DoneIcon    lipgloss.Style
 	RowIcon     lipgloss.Style
 	RowMeta     lipgloss.Style
 	Empty       lipgloss.Style
@@ -133,7 +140,8 @@ func buildStylesWithPalette(p Palette) Styles {
 			Bold(true).
 			Foreground(p.SelectionFg).
 			Background(p.SelectionBg),
-		Done:     lipgloss.NewStyle().Faint(true).Strikethrough(true),
+		Done:     lipgloss.NewStyle().Foreground(p.Done),
+		DoneIcon: lipgloss.NewStyle().Foreground(p.DoneIcon),
 		RowIcon:  lipgloss.NewStyle().Foreground(p.Border),
 		RowMeta:  lipgloss.NewStyle().Foreground(p.Border),
 		Empty:    lipgloss.NewStyle().Faint(true),

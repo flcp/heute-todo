@@ -269,52 +269,49 @@ func truncateLeft(s string, max int) string {
 }
 
 func (m Model) renderRow(i int, t todotxt.Todo) string {
-	icon := "○"
-	if t.Done {
-		icon = "✓"
-	}
-
 	title, meta := splitDescription(t.Description)
 	if title == "" {
 		title = t.Description
 	}
 
-	hasPriority := t.Priority >= 'A' && t.Priority <= 'Z'
+	hasPriority := !t.Done && t.Priority >= 'A' && t.Priority <= 'Z'
 
-	// The selected row is highlighted as a whole, so it drops the per-segment
-	// coloring and renders one plain line under the selection style.
 	if i == m.normalState.cursorPosition {
-		parts := []string{icon}
-		if hasPriority {
-			parts = append(parts, string(t.Priority))
+		var parts []string
+		if t.Done {
+			parts = []string{"✓", title}
 		} else {
-			parts = append(parts, " ")
+			prioritySlot := " "
+			if hasPriority {
+				prioritySlot = string(t.Priority)
+			}
+			parts = []string{prioritySlot, title}
 		}
-		parts = append(parts, title)
 		if meta != "" {
 			parts = append(parts, meta)
 		}
 		return m.styles.Selected.Render(strings.Join(parts, " "))
 	}
 
-	// Everything but the title is faint (border-colored); the priority letter
-	// is the one exception, color-coded by urgency.
-	parts := []string{m.styles.RowIcon.Render(icon)}
+	if t.Done {
+		text := title
+		if meta != "" {
+			text += " " + meta
+		}
+		return m.styles.DoneIcon.Render("✓") + " " + m.styles.Done.Render(text)
+	}
+
+	var parts []string
 	if hasPriority {
 		idx := int(t.Priority-'A')
 		if idx >= len(m.styles.Priority) {
 			idx = len(m.styles.Priority) - 1
 		}
-		parts = append(parts, m.styles.Priority[idx].Render(string(t.Priority)))
+		parts = []string{m.styles.Priority[idx].Render(string(t.Priority))}
 	} else {
-		parts = append(parts, " ")
+		parts = []string{" "}
 	}
-
-	if t.Done {
-		parts = append(parts, m.styles.Done.Render(title))
-	} else {
-		parts = append(parts, title)
-	}
+	parts = append(parts, title)
 	if meta != "" {
 		parts = append(parts, m.styles.RowMeta.Render(meta))
 	}
