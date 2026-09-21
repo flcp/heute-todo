@@ -212,6 +212,24 @@ func SortByPriority(todos []Todo) []Todo {
 	return out
 }
 
+// SortIndicesByPriority returns the indices into todos in priority-sort order (incomplete
+// tasks first by priority A–Z, then completed tasks). The original slice is not
+// mutated.
+func SortIndicesByPriority(todos []Todo) []int {
+	idx := make([]int, len(todos))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		ta, tb := todos[idx[a]], todos[idx[b]]
+		if ta.Done != tb.Done {
+			return !ta.Done
+		}
+		return priorityRank(ta.Priority) < priorityRank(tb.Priority)
+	})
+	return idx
+}
+
 func priorityRank(p byte) int {
 	if p >= 'A' && p <= 'Z' {
 		return int(p - 'A')

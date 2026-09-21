@@ -41,7 +41,11 @@ func (m Model) renderCommandLine() string {
 	case m.normalState.pendingDelete:
 		content = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
-		content = m.styles.Help.Render("j/k move · J/K reorder · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · q quit")
+		var reorder string
+		if m.sort == sortFree {
+			reorder = " · J/K reorder"
+		}
+		content = m.styles.Help.Render("j/k move" + reorder + " · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · s sort · q quit")
 	}
 
 	width := m.width
@@ -57,7 +61,7 @@ func (m Model) renderDetail() string {
 	if len(m.todos) == 0 || m.normalState.cursorPosition >= len(m.todos) {
 		return m.styles.Empty.Render("(no task selected)")
 	}
-	t := m.todos[m.normalState.cursorPosition]
+	t := m.todos[m.cursorSourceIndex()]
 
 	var b strings.Builder
 	b.WriteString(m.styles.DetailTitle.Render(detailTitle(t)))
@@ -178,11 +182,11 @@ func (m Model) renderBody() string {
 	if len(m.todos) == 0 {
 		list.WriteString(m.styles.Empty.Render("(no tasks yet)"))
 	}
-	for i, t := range m.todos {
-		if i > 0 {
+	for dispIdx, srcIdx := range m.displayIndices() {
+		if dispIdx > 0 {
 			list.WriteByte('\n')
 		}
-		list.WriteString(m.renderRow(i, t))
+		list.WriteString(m.renderRow(dispIdx, m.todos[srcIdx]))
 	}
 
 	todosPanel := m.styles.TodoPanel.Width(leftW)
@@ -223,7 +227,11 @@ func (m Model) renderHeader() string {
 	}
 
 	const name = "HEUTE"
-	openText := fmt.Sprintf("%d open", open)
+	sortLabel := "file"
+	if m.sort == sortPriority {
+		sortLabel = "priority"
+	}
+	openText := fmt.Sprintf("%d open · %s", open, sortLabel)
 
 	// Each panel adds two columns of border, so three panels cost six columns.
 	const borders = 6

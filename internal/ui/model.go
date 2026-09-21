@@ -18,11 +18,20 @@ const (
 	modeInsert
 )
 
+// sortMode controls how todos are ordered in the list view.
+type sortMode int
+
+const (
+	sortFree     sortMode = iota // file order
+	sortPriority                 // priority order (A first, unprioritized last)
+)
+
 // Model is the root Bubble Tea model.
 type Model struct {
 	path   string
 	todos  []todotxt.Todo
 	mode   mode
+	sort   sortMode
 	width  int // terminal width, used to lay out the header panels
 	height int // terminal height, used to pin the command line to the bottom
 
@@ -75,6 +84,40 @@ func newInput() textinput.Model {
 	ti.Prompt = "› "
 	ti.Placeholder = "(A) Buy milk +errands @home due:2026-09-20"
 	return ti
+}
+
+// displayIndices returns a slice mapping display-position → m.todos index.
+func (m Model) displayIndices() []int {
+	if m.sort == sortPriority {
+		return todotxt.SortIndicesByPriority(m.todos)
+	}
+	idx := make([]int, len(m.todos))
+	for i := range idx {
+		idx[i] = i
+	}
+	return idx
+}
+
+// cursorSourceIndex returns the m.todos index for the item under the cursor.
+func (m Model) cursorSourceIndex() int {
+	if len(m.todos) == 0 {
+		return 0
+	}
+	indices := m.displayIndices()
+	if m.normalState.cursorPosition >= len(indices) {
+		return 0
+	}
+	return indices[m.normalState.cursorPosition]
+}
+
+// displayIndexOf returns the display position for the given m.todos source index.
+func (m Model) displayIndexOf(sourceIdx int) int {
+	for dispIdx, srcIdx := range m.displayIndices() {
+		if srcIdx == sourceIdx {
+			return dispIdx
+		}
+	}
+	return 0
 }
 
 // Init implements tea.Model.

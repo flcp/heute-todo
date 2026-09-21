@@ -75,12 +75,12 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.toggleDone()
 		return m, cmd
 	case "J":
-		if len(m.todos) > 0 {
+		if len(m.todos) > 0 && m.sort == sortFree {
 			cmd := m.moveSelected(1)
 			return m, cmd
 		}
 	case "K":
-		if len(m.todos) > 0 {
+		if len(m.todos) > 0 && m.sort == sortFree {
 			cmd := m.moveSelected(-1)
 			return m, cmd
 		}
@@ -88,6 +88,9 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.todos) > 0 {
 			m.normalState.pendingDelete = true
 		}
+		return m, nil
+	case "s":
+		m.cycleSortMode()
 		return m, nil
 	}
 	return m, nil
@@ -133,6 +136,18 @@ func (m Model) updateDeletePending(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// cycleSortMode toggles between sortFree and sortPriority, keeping the cursor
+// on the same task after the reorder.
+func (m *Model) cycleSortMode() {
+	if len(m.todos) == 0 {
+		m.sort = (m.sort + 1) % 2
+		return
+	}
+	sourceIdx := m.cursorSourceIndex()
+	m.sort = (m.sort + 1) % 2
+	m.normalState.cursorPosition = m.displayIndexOf(sourceIdx)
+}
+
 // moveCursorRelative shifts the cursor by delta, clamped to the list bounds.
 func (m *Model) moveCursorRelative(delta int) {
 	if len(m.todos) == 0 {
@@ -164,7 +179,7 @@ func (m *Model) moveSelected(delta int) tea.Cmd {
 // enterAddMode switches to insert mode to add a new todo, placed below the
 // selected todo when below is true, otherwise above it.
 func (m *Model) enterAddMode(below bool) tea.Cmd {
-	at := m.normalState.cursorPosition
+	at := m.cursorSourceIndex()
 	if below {
 		at++
 	}
@@ -181,7 +196,7 @@ func (m *Model) enterAddMode(below bool) tea.Cmd {
 func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
 	m.mode = modeInsert
 	m.editState.isAddingItem = false
-	currentTodo := m.todos[m.normalState.cursorPosition]
+	currentTodo := m.todos[m.cursorSourceIndex()]
 	m.editState.input.SetValue(currentTodo.String())
 	if cursorAtStart {
 		m.editState.input.CursorStart()
@@ -194,7 +209,7 @@ func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
 // toggleDone flips the done state of the selected todo (stamping or clearing the
 // completion date) and persists the change.
 func (m *Model) toggleDone() tea.Cmd {
-	i := m.normalState.cursorPosition
+	i := m.cursorSourceIndex()
 	m.todos[i] = m.todos[i].Toggled(time.Now())
 	return m.saveCmd()
 }
@@ -203,7 +218,7 @@ func (m *Model) toggleDone() tea.Cmd {
 // bounds, and persists the change.
 func (m *Model) deleteSelected() tea.Cmd {
 	m.normalState.pendingDelete = false
-	i := m.normalState.cursorPosition
+	i := m.cursorSourceIndex()
 	m.todos = append(m.todos[:i], m.todos[i+1:]...)
 	if last := len(m.todos) - 1; m.normalState.cursorPosition > last {
 		m.normalState.cursorPosition = last
@@ -233,14 +248,14 @@ func (m *Model) commit() {
 		m.todos = append(m.todos, todotxt.Todo{})
 		copy(m.todos[index+1:], m.todos[index:])
 	} else {
-		if m.normalState.cursorPosition >= len(m.todos) {
+		if len(m.todos) == 0 {
 			return
 		}
-		index = m.normalState.cursorPosition
+		index = m.cursorSourceIndex()
 	}
 
 	m.todos[index] = newTodo
-	m.normalState.cursorPosition = index
+	m.normalState.cursorPosition = m.displayIndexOf(index)
 }
 
 // exitInsert returns to normal mode and clears the input.
