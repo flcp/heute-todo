@@ -19,6 +19,7 @@ type Palette struct {
 	Done           lipgloss.Color   // done task text
 	DoneIcon       lipgloss.Color   // checkmark color
 	PriorityColors []lipgloss.Color // A, B, C, … priority letter colors
+	LogoRainbow    []lipgloss.Color // gradient stops for the ASCII art logo, left → right
 }
 
 // Nord is the Nord palette (https://www.nordtheme.com): cool, low-contrast
@@ -48,6 +49,15 @@ var Nord = Palette{
 		"#7A9C68", // 8
 		"#688B57", // 9
 	},
+	// Rainbow uses Nord's aurora + frost colors in spectral order.
+	LogoRainbow: []lipgloss.Color{
+		"#BF616A", // red   (Error)
+		"#D08770", // orange (Danger)
+		"#EBCB8B", // yellow (Warning)
+		"#A3BE8C", // green  (Success)
+		"#81A1C1", // blue   (Info)
+		"#88C0D0", // cyan   (Accent)
+	},
 }
 
 // Default is the original 256-color palette, kept as a fallback theme.
@@ -76,6 +86,14 @@ var Default = Palette{
 		"76",  // 8
 		"70",  // 9 – forest green
 	},
+	LogoRainbow: []lipgloss.Color{
+		"#FF5F5F", // red
+		"#FF8700", // orange
+		"#FFD700", // yellow
+		"#5FD75F", // green
+		"#5F87FF", // blue
+		"#FF5FFF", // magenta
+	},
 }
 
 // DefaultTheme names the palette used when none is selected.
@@ -100,6 +118,7 @@ func paletteFor(name string) Palette {
 // Palette by buildStylesWithPalette.
 type Styles struct {
 	HeaderName  lipgloss.Style
+	HeaderLogo  lipgloss.Style
 	HeaderPath  lipgloss.Style
 	HeaderCount lipgloss.Style
 	CommandLine lipgloss.Style
@@ -118,6 +137,8 @@ type Styles struct {
 	Insert      lipgloss.Style
 	Err         lipgloss.Style
 	Delete      lipgloss.Style
+	PathInline  lipgloss.Style   // path text inside the footer bar (no border)
+	LogoRainbow []lipgloss.Color // gradient stops for the ASCII art logo
 	Priority    []lipgloss.Style // indexed by priority letter (A=0, B=1, …)
 }
 
@@ -135,6 +156,7 @@ func buildStylesWithPalette(p Palette) Styles {
 
 	return Styles{
 		HeaderName: headerBase.Bold(true).Foreground(p.Accent),
+		HeaderLogo: headerBase.Padding(1, 1),
 		HeaderPath: headerBase.Foreground(p.Info),
 		HeaderCount: headerBase.
 			Bold(true).
@@ -159,6 +181,8 @@ func buildStylesWithPalette(p Palette) Styles {
 		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Err:      lipgloss.NewStyle().Bold(true).Foreground(p.Error),
 		Delete:   lipgloss.NewStyle().Bold(true).Foreground(p.Danger),
+		PathInline: lipgloss.NewStyle().Foreground(p.Info).Faint(true),
+		LogoRainbow: p.LogoRainbow,
 		Priority: priority,
 	}
 }

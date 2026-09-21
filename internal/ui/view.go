@@ -35,24 +35,35 @@ func (m Model) View() string {
 // renderCommandLine renders the footer prompt as a full-width bordered panel,
 // matching the header style.
 func (m Model) renderCommandLine() string {
-	var content string
+	var modeContent string
 	switch {
 	case m.mode == modeInsert:
-		content = m.styles.Insert.Render("Add") + " " + m.editState.input.View()
+		modeContent = m.styles.Insert.Render("Add") + " " + m.editState.input.View()
 	case m.normalState.pendingDelete:
-		content = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
+		modeContent = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
 		var reorder string
 		if m.sort == sortFree {
 			reorder = " · J/K reorder"
 		}
-		content = m.styles.Help.Render("j/k move" + reorder + " · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · s sort · q quit")
+		modeContent = m.styles.Help.Render("j/k move" + reorder + " · g/G top/bottom · space done · o/O add · i/I/a edit · dd delete · s sort · q quit")
 	}
 
 	width := m.width
 	if width <= 0 {
 		width = 80
 	}
+
+	// Inner content area = panel Width(width-2) minus left/right padding (2).
+	innerW := width - 4
+	path := m.styles.PathInline.Render(truncateLeft(m.absPath(), innerW/3))
+	pathW := lipgloss.Width(path)
+	helpW := innerW - pathW
+	if helpW < 0 {
+		helpW = 0
+	}
+	content := lipgloss.NewStyle().Width(helpW).Render(modeContent) + path
+
 	return m.styles.CommandLine.Width(width - 2).Render(content)
 }
 
@@ -211,9 +222,8 @@ func (m Model) renderBody() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, sep, right)
 }
 
-// renderHeader lays out the top bar as three bordered panels: the app name on
-// the left, the todo file path in the middle, and the open-task count on the
-// right.
+// renderHeader lays out the top bar: the ASCII art logo on the left and the
+// open-task count on the right, with empty space between them.
 func (m Model) renderHeader() string {
 	open := 0
 	for _, t := range m.todos {
@@ -227,7 +237,6 @@ func (m Model) renderHeader() string {
 		width = 80
 	}
 
-	const name = "HEUTE"
 	sortLabel := "file"
 	switch m.sort {
 	case sortPriority:
@@ -237,20 +246,86 @@ func (m Model) renderHeader() string {
 	}
 	openText := fmt.Sprintf("%d open · %s", open, sortLabel)
 
-	// Each panel adds two columns of border, so three panels cost six columns.
-	const borders = 6
-	leftW := lipgloss.Width(name) + 2 // +2 for the panel's horizontal padding
+	// logoW is the max line width of the ASCII art; +2 adds the horizontal padding.
+	const logoW = 24
+	leftW := logoW + 2
 	rightW := lipgloss.Width(openText) + 2
-	midW := width - borders - leftW - rightW
-	if midW < 8 {
-		midW = 8
-	}
 
-	left := m.styles.HeaderName.Width(leftW).Render(name)
-	mid := m.styles.HeaderPath.Width(midW).Render(truncateLeft(m.absPath(), midW-2))
+	left := m.styles.HeaderLogo.Width(leftW).Render(m.renderLogo())
 	right := m.styles.HeaderCount.Width(rightW).Render(openText)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, mid, right)
+	// Fill the gap between the two panels with blank space so the count lands
+	// at the top-right corner.
+	gapW := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gapW < 0 {
+		gapW = 0
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", gapW), right)
+}
+
+// renderLogo returns the ASCII art "heute" with a left-to-right gradient
+// using the theme's own rainbow stops.
+func (m Model) renderLogo() string {
+	lines := [4]string{
+		`   __            __     `,
+		`  / /  ___ __ __/ /____ `,
+		` / _ \/ -_) // / __/ -_)`,
+		`/_//_/\__/\_,_/\__/\__/`,
+	}
+	stops := m.styles.LogoRainbow
+	var b strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		for x, ch := range line {
+			color := interpolateRainbow(stops, x, 23)
+			b.WriteString(lipgloss.NewStyle().Foreground(color).Render(string(ch)))
+		}
+	}
+	return b.String()
+}
+
+// interpolateRainbow returns a color from a gradient of stops at position x/maxX.
+func interpolateRainbow(stops []lipgloss.Color, x, maxX int) lipgloss.Color {
+	if len(stops) == 0 {
+		return lipgloss.Color("#FFFFFF")
+	}
+	if maxX <= 0 || len(stops) == 1 {
+		return stops[0]
+	}
+	t := float64(x) / float64(maxX)
+	scaled := t * float64(len(stops)-1)
+	lo := int(scaled)
+	hi := lo + 1
+	if hi >= len(stops) {
+		return stops[len(stops)-1]
+	}
+	return blendColors(stops[lo], stops[hi], scaled-float64(lo))
+}
+
+// blendColors linearly interpolates between two hex colors by factor t (0..1).
+func blendColors(a, b lipgloss.Color, t float64) lipgloss.Color {
+	ra, ga, ba := parseHexColor(string(a))
+	rb, gb, bb := parseHexColor(string(b))
+	r := uint8(float64(ra)*(1-t) + float64(rb)*t + 0.5)
+	g := uint8(float64(ga)*(1-t) + float64(gb)*t + 0.5)
+	bv := uint8(float64(ba)*(1-t) + float64(bb)*t + 0.5)
+	return lipgloss.Color(fmt.Sprintf("#%02X%02X%02X", r, g, bv))
+}
+
+// parseHexColor parses a "#RRGGBB" string into its RGB components.
+func parseHexColor(s string) (uint8, uint8, uint8) {
+	s = strings.TrimPrefix(s, "#")
+	if len(s) != 6 {
+		return 128, 128, 128
+	}
+	v, err := strconv.ParseUint(s, 16, 32)
+	if err != nil {
+		return 128, 128, 128
+	}
+	return uint8(v >> 16), uint8(v >> 8), uint8(v)
 }
 
 // absPath returns the todo file's absolute path, falling back to the stored
