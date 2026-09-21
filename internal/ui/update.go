@@ -136,15 +136,15 @@ func (m Model) updateDeletePending(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// cycleSortMode toggles between sortFree and sortPriority, keeping the cursor
-// on the same task after the reorder.
+// cycleSortMode advances to the next sort mode, keeping the cursor on the same
+// task after the reorder.
 func (m *Model) cycleSortMode() {
 	if len(m.todos) == 0 {
-		m.sort = (m.sort + 1) % 2
+		m.sort = (m.sort + 1) % sortModeCount
 		return
 	}
 	sourceIdx := m.cursorSourceIndex()
-	m.sort = (m.sort + 1) % 2
+	m.sort = (m.sort + 1) % sortModeCount
 	m.normalState.cursorPosition = m.displayIndexOf(sourceIdx)
 }
 

@@ -228,8 +228,11 @@ func (m Model) renderHeader() string {
 
 	const name = "HEUTE"
 	sortLabel := "file"
-	if m.sort == sortPriority {
+	switch m.sort {
+	case sortPriority:
 		sortLabel = "priority"
+	case sortName:
+		sortLabel = "name"
 	}
 	openText := fmt.Sprintf("%d open · %s", open, sortLabel)
 

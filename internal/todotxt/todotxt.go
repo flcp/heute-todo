@@ -230,6 +230,24 @@ func SortIndicesByPriority(todos []Todo) []int {
 	return idx
 }
 
+// SortIndicesByName returns the indices into todos in case-insensitive
+// alphabetical order by description, with completed tasks sorted to the bottom.
+// The original slice is not mutated.
+func SortIndicesByName(todos []Todo) []int {
+	idx := make([]int, len(todos))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		ta, tb := todos[idx[a]], todos[idx[b]]
+		if ta.Done != tb.Done {
+			return !ta.Done
+		}
+		return strings.ToLower(ta.Description) < strings.ToLower(tb.Description)
+	})
+	return idx
+}
+
 func priorityRank(p byte) int {
 	if p >= 'A' && p <= 'Z' {
 		return int(p - 'A')

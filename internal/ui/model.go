@@ -24,6 +24,8 @@ type sortMode int
 const (
 	sortFree     sortMode = iota // file order
 	sortPriority                 // priority order (A first, unprioritized last)
+	sortName                     // alphabetical by description
+	sortModeCount                // sentinel: total number of sort modes
 )
 
 // Model is the root Bubble Tea model.
@@ -90,6 +92,9 @@ func newInput() textinput.Model {
 func (m Model) displayIndices() []int {
 	if m.sort == sortPriority {
 		return todotxt.SortIndicesByPriority(m.todos)
+	}
+	if m.sort == sortName {
+		return todotxt.SortIndicesByName(m.todos)
 	}
 	idx := make([]int, len(m.todos))
 	for i := range idx {
