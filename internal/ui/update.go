@@ -27,6 +27,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.normalState.pendingDelete {
 			return m.updateDeletePending(msg)
 		}
+		if m.filter.focus != focusList {
+			return m.updateFilterMode(msg)
+		}
 		return m.updateNormalMode(msg)
 	}
 }
@@ -47,9 +50,15 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "g", "home":
 		m.normalState.cursorPosition = 0
 	case "G", "end":
-		if len(m.todos) > 0 {
-			m.normalState.cursorPosition = len(m.todos) - 1
+		if n := m.visibleCount(); n > 0 {
+			m.normalState.cursorPosition = n - 1
 		}
+	case "tab":
+		m.filter.focus = focusProjects
+		return m, nil
+	case "shift+tab":
+		m.filter.focus = focusContexts
+		return m, nil
 	case "o":
 		cmd := m.enterAddMode(true)
 		return m, cmd
@@ -151,6 +160,153 @@ func (m Model) updateDeletePending(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// updateFilterMode handles input while a header filter box has focus: j/k move
+// the box cursor, space/enter toggle a row's selection, Tab cycles focus and Esc
+// returns to the list.
+func (m Model) updateFilterMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "esc":
+		m.filter.focus = focusList
+	case "tab":
+		m.advanceFilterFocus(true)
+	case "shift+tab":
+		m.advanceFilterFocus(false)
+	case "j", "down":
+		m.moveFilterCursor(1)
+	case "k", "up":
+		m.moveFilterCursor(-1)
+	case "g", "home":
+		m.setFilterCursor(0)
+	case "G", "end":
+		m.setFilterCursor(m.filterRowCount() - 1)
+	case " ", "enter":
+		m.toggleFilterRow()
+	case "!":
+		m.soloFilterRow()
+	}
+	return m, nil
+}
+
+// filterKeys returns the row keys of the currently focused filter box.
+func (m Model) filterKeys() []string {
+	if m.filter.focus == focusContexts {
+		return m.contextKeys()
+	}
+	return m.projectKeys()
+}
+
+// filterRowCount is the number of rows in the focused filter box.
+func (m Model) filterRowCount() int { return len(m.filterKeys()) }
+
+// filterCursorPtr points at the cursor field for the focused filter box.
+func (m *Model) filterCursorPtr() *int {
+	if m.filter.focus == focusContexts {
+		return &m.filter.contextCursor
+	}
+	return &m.filter.projectCursor
+}
+
+func (m *Model) moveFilterCursor(delta int) {
+	m.setFilterCursor(*m.filterCursorPtr() + delta)
+}
+
+// setFilterCursor moves the focused box's cursor to pos, clamped to its rows.
+func (m *Model) setFilterCursor(pos int) {
+	n := m.filterRowCount()
+	if n == 0 {
+		*m.filterCursorPtr() = 0
+		return
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > n-1 {
+		pos = n - 1
+	}
+	*m.filterCursorPtr() = pos
+}
+
+// advanceFilterFocus cycles focus list → projects → contexts → list (or the
+// reverse when forward is false).
+func (m *Model) advanceFilterFocus(forward bool) {
+	order := []filterFocus{focusList, focusProjects, focusContexts}
+	i := 0
+	for idx, f := range order {
+		if f == m.filter.focus {
+			i = idx
+			break
+		}
+	}
+	n := len(order)
+	if forward {
+		m.filter.focus = order[(i+1)%n]
+	} else {
+		m.filter.focus = order[(i-1+n)%n]
+	}
+}
+
+// toggleFilterRow flips the selection of the row under the focused box's cursor,
+// then keeps the list cursor within the (possibly smaller) visible set.
+func (m *Model) toggleFilterRow() {
+	keys := m.filterKeys()
+	cursor := *m.filterCursorPtr()
+	if cursor < 0 || cursor >= len(keys) {
+		return
+	}
+	off := &m.filter.offContexts
+	if m.filter.focus == focusProjects {
+		off = &m.filter.offProjects
+	}
+	if *off == nil {
+		*off = map[string]bool{}
+	}
+	key := keys[cursor]
+	if (*off)[key] {
+		delete(*off, key)
+	} else {
+		(*off)[key] = true
+	}
+	if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
+		if last < 0 {
+			last = 0
+		}
+		m.normalState.cursorPosition = last
+	}
+}
+
+// soloFilterRow selects only the row under the focused box's cursor, deselecting
+// every other row in that dimension. Toggling it again is left to the caller.
+func (m *Model) soloFilterRow() {
+	keys := m.filterKeys()
+	cursor := *m.filterCursorPtr()
+	if cursor < 0 || cursor >= len(keys) {
+		return
+	}
+	off := map[string]bool{}
+	for _, k := range keys {
+		if k != keys[cursor] {
+			off[k] = true
+		}
+	}
+	if m.filter.focus == focusProjects {
+		m.filter.offProjects = off
+	} else {
+		m.filter.offContexts = off
+	}
+	if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
+		if last < 0 {
+			last = 0
+		}
+		m.normalState.cursorPosition = last
+	}
+}
+
 // cycleSortMode advances to the next sort mode, keeping the cursor on the same
 // task after the reorder.
 func (m *Model) cycleSortMode() {
@@ -165,7 +321,8 @@ func (m *Model) cycleSortMode() {
 
 // moveCursorRelative shifts the cursor by delta, clamped to the list bounds.
 func (m *Model) moveCursorRelative(delta int) {
-	if len(m.todos) == 0 {
+	n := m.visibleCount()
+	if n == 0 {
 		m.normalState.cursorPosition = 0
 		return
 	}
@@ -173,7 +330,7 @@ func (m *Model) moveCursorRelative(delta int) {
 	if m.normalState.cursorPosition < 0 {
 		m.normalState.cursorPosition = 0
 	}
-	if last := len(m.todos) - 1; m.normalState.cursorPosition > last {
+	if last := n - 1; m.normalState.cursorPosition > last {
 		m.normalState.cursorPosition = last
 	}
 }
@@ -235,7 +392,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 	m.normalState.pendingDelete = false
 	i := m.cursorSourceIndex()
 	m.todos = append(m.todos[:i], m.todos[i+1:]...)
-	if last := len(m.todos) - 1; m.normalState.cursorPosition > last {
+	if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
 		m.normalState.cursorPosition = last
 	}
 	if m.normalState.cursorPosition < 0 {

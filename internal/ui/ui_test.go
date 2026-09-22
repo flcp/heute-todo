@@ -475,3 +475,120 @@ func TestCommitDropsEmptyScaffold(t *testing.T) {
 		t.Fatalf("todo = %+v, want (A) \"Buy milk\" with no empty tags", m.todos[0])
 	}
 }
+
+func filterModel(lines ...string) Model {
+	todos := make([]todotxt.Todo, len(lines))
+	for i, l := range lines {
+		todos[i], _ = todotxt.Parse(l)
+	}
+	return Model{todos: todos, editState: editState{input: newInput()}}
+}
+
+func TestFilterDeselectProjectHidesMatching(t *testing.T) {
+	m := filterModel("call bob +work", "buy milk +home", "just a task")
+	if m.visibleCount() != 3 {
+		t.Fatalf("initial visible = %d, want 3 (all selected)", m.visibleCount())
+	}
+	m.filter.offProjects = map[string]bool{"work": true}
+	if m.visibleCount() != 2 {
+		t.Fatalf("visible = %d, want 2 after hiding +work", m.visibleCount())
+	}
+	for _, i := range m.displayIndices() {
+		if strings.Contains(m.todos[i].Description, "+work") {
+			t.Fatalf("+work todo should be hidden, got %q", m.todos[i].Description)
+		}
+	}
+}
+
+func TestFilterNoneRowHidesUntagged(t *testing.T) {
+	m := filterModel("call bob +work", "just a task")
+	m.filter.offProjects = map[string]bool{noneKey: true}
+	if m.visibleCount() != 1 {
+		t.Fatalf("visible = %d, want 1 after hiding untagged", m.visibleCount())
+	}
+	if got := m.todos[m.displayIndices()[0]].Description; got != "call bob +work" {
+		t.Fatalf("remaining = %q, want the +work todo", got)
+	}
+}
+
+func TestFilterAndAcrossDimensions(t *testing.T) {
+	m := filterModel("a +work @home", "b +work @office")
+	m.filter.offContexts = map[string]bool{"home": true}
+	if m.visibleCount() != 1 {
+		t.Fatalf("visible = %d, want 1 (context filter ANDs)", m.visibleCount())
+	}
+	if !strings.Contains(m.todos[m.displayIndices()[0]].Description, "@office") {
+		t.Fatal("only the @office todo should survive")
+	}
+}
+
+func TestFilterFocusCyclesWithTab(t *testing.T) {
+	m := filterModel("a +work @home")
+	for _, want := range []filterFocus{focusProjects, focusContexts, focusList} {
+		m = step(m, tab())
+		if m.filter.focus != want {
+			t.Fatalf("focus = %d, want %d", m.filter.focus, want)
+		}
+	}
+	m = step(m, tab()) // list -> projects
+	m = step(m, esc())
+	if m.filter.focus != focusList {
+		t.Fatalf("esc should return to the list, got focus %d", m.filter.focus)
+	}
+}
+
+func TestFilterToggleViaSpace(t *testing.T) {
+	m := filterModel("a +work", "b +home", "c")
+	m = step(m, tab()) // focus projects; keys = ["", "home", "work"]
+	m = step(m, key("j"))
+	m = step(m, key("j")) // cursor on "work"
+	m = step(m, key(" ")) // deselect it
+	if !m.filter.offProjects["work"] {
+		t.Fatal("space should deselect the work row")
+	}
+	if m.visibleCount() != 2 {
+		t.Fatalf("visible = %d, want 2 after hiding +work", m.visibleCount())
+	}
+	m = step(m, key(" ")) // re-select
+	if m.filter.offProjects["work"] {
+		t.Fatal("space should re-select the work row")
+	}
+	if m.visibleCount() != 3 {
+		t.Fatalf("visible = %d, want 3 after re-selecting", m.visibleCount())
+	}
+}
+
+func TestFilterToggleClampsListCursor(t *testing.T) {
+	m := filterModel("a +work", "b +work", "c +work")
+	m.normalState.cursorPosition = 2 // last row
+	m = step(m, tab())               // focus projects; keys = ["", "work"]
+	m = step(m, key("j"))            // cursor on "work"
+	m = step(m, key(" "))            // hide all +work todos
+	if m.visibleCount() != 0 {
+		t.Fatalf("visible = %d, want 0", m.visibleCount())
+	}
+	if m.normalState.cursorPosition != 0 {
+		t.Fatalf("list cursor = %d, want clamped to 0", m.normalState.cursorPosition)
+	}
+}
+
+func TestFilterSoloSelectsOnlyCursorRow(t *testing.T) {
+	m := filterModel("a +work", "b +home", "c +errands")
+	m = step(m, tab())    // focus projects; keys = ["", "errands", "home", "work"]
+	m = step(m, key("j")) // cursor on "errands"
+	m = step(m, key("!")) // only errands
+	for _, k := range []string{noneKey, "home", "work"} {
+		if !m.filter.offProjects[k] {
+			t.Fatalf("%q should be deselected after solo", k)
+		}
+	}
+	if m.filter.offProjects["errands"] {
+		t.Fatal("errands should stay selected after solo")
+	}
+	if m.visibleCount() != 1 {
+		t.Fatalf("visible = %d, want 1 (only +errands)", m.visibleCount())
+	}
+	if !strings.Contains(m.todos[m.displayIndices()[0]].Description, "+errands") {
+		t.Fatal("the only visible todo should be +errands")
+	}
+}

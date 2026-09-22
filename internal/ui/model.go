@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"sort"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -39,6 +41,7 @@ type Model struct {
 
 	normalState normalState
 	editState   editState
+	filter      filterState
 
 	styles Styles // active theme's rendered styles
 
@@ -49,6 +52,28 @@ type Model struct {
 type normalState struct {
 	cursorPosition int
 	pendingDelete  bool // armed by the first d of a dd delete
+}
+
+// filterFocus identifies where keyboard input is directed: the todo list or one
+// of the header filter boxes.
+type filterFocus int
+
+const (
+	focusList filterFocus = iota
+	focusProjects
+	focusContexts
+)
+
+// filterState holds the project/context filter selections and which box (if any)
+// currently has focus. Deselected keys are stored (rather than selected ones) so
+// that newly-added tags default to visible ("all selected"). The empty-string
+// key "" represents the "(none)" row: untagged todos.
+type filterState struct {
+	focus         filterFocus
+	projectCursor int
+	contextCursor int
+	offProjects   map[string]bool
+	offContexts   map[string]bool
 }
 
 // editField identifies a field in the detail panel that edit mode can jump the
@@ -117,19 +142,86 @@ func newInput() textinput.Model {
 	return ti
 }
 
-// displayIndices returns a slice mapping display-position → m.todos index.
+// displayIndices returns a slice mapping display-position → m.todos index, in
+// the active sort order and with the project/context filter applied.
 func (m Model) displayIndices() []int {
-	if m.sort == sortPriority {
-		return todotxt.SortIndicesByPriority(m.todos)
+	var order []int
+	switch m.sort {
+	case sortPriority:
+		order = todotxt.SortIndicesByPriority(m.todos)
+	case sortName:
+		order = todotxt.SortIndicesByName(m.todos)
+	default:
+		order = make([]int, len(m.todos))
+		for i := range order {
+			order[i] = i
+		}
 	}
-	if m.sort == sortName {
-		return todotxt.SortIndicesByName(m.todos)
+	filtered := order[:0:0]
+	for _, i := range order {
+		if m.passesFilter(m.todos[i]) {
+			filtered = append(filtered, i)
+		}
 	}
-	idx := make([]int, len(m.todos))
-	for i := range idx {
-		idx[i] = i
+	return filtered
+}
+
+// visibleCount is the number of todos currently shown after filtering.
+func (m Model) visibleCount() int {
+	return len(m.displayIndices())
+}
+
+// noneKey is the internal key for the "(none)" filter row: todos with no tag in
+// that dimension.
+const noneKey = ""
+
+// projectKeys returns the filter rows for projects: the "(none)" key followed by
+// the sorted unique +projects present across all todos.
+func (m Model) projectKeys() []string {
+	return tagKeys(m.todos, func(t todotxt.Todo) []string { return t.Projects })
+}
+
+// contextKeys returns the filter rows for contexts: the "(none)" key followed by
+// the sorted unique @contexts present across all todos.
+func (m Model) contextKeys() []string {
+	return tagKeys(m.todos, func(t todotxt.Todo) []string { return t.Contexts })
+}
+
+// tagKeys collects the sorted unique tags produced by tagsOf, prefixed with the
+// "(none)" key.
+func tagKeys(todos []todotxt.Todo, tagsOf func(todotxt.Todo) []string) []string {
+	set := map[string]bool{}
+	for _, t := range todos {
+		for _, tag := range tagsOf(t) {
+			set[tag] = true
+		}
 	}
-	return idx
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return append([]string{noneKey}, names...)
+}
+
+// passesFilter reports whether t survives both the project and context filters.
+// A dimension passes when any of the todo's keys in that dimension (its tags, or
+// the "(none)" key when it has none) is currently selected.
+func (m Model) passesFilter(t todotxt.Todo) bool {
+	return passesDimension(t.Projects, m.filter.offProjects) &&
+		passesDimension(t.Contexts, m.filter.offContexts)
+}
+
+func passesDimension(tags []string, off map[string]bool) bool {
+	if len(tags) == 0 {
+		return !off[noneKey]
+	}
+	for _, tag := range tags {
+		if !off[tag] {
+			return true
+		}
+	}
+	return false
 }
 
 // cursorSourceIndex returns the m.todos index for the item under the cursor.

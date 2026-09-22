@@ -37,6 +37,17 @@ func (m Model) View() string {
 func (m Model) renderCommandLine() string {
 	var modeContent string
 	switch {
+	case m.filter.focus != focusList:
+		dim := "projects"
+		if m.filter.focus == focusContexts {
+			dim = "contexts"
+		}
+		modeContent = m.styles.Insert.Render("filter "+dim) + "  " +
+			m.helpItem("j/k", "navigate") + "  " +
+			m.helpItem("⎵ ", "toggle") + "  " +
+			m.helpItem("!", "only") + "  " +
+			m.helpItem("⇥", "next") + "  " +
+			m.helpItem("esc", "back")
 	case m.mode == modeInsert:
 		label := "Add"
 		if !m.editState.isAddingItem {
@@ -64,6 +75,7 @@ func (m Model) renderCommandLine() string {
 			m.helpItem("d", "delete"),
 		}
 		misc := []string{
+			m.helpItem("⇥", "filter"),
 			m.helpItem("s", "sort"),
 			m.helpItem("q", "quit"),
 		}
@@ -312,14 +324,105 @@ func (m Model) renderHeader() string {
 	left := m.styles.HeaderLogo.Width(leftW).Render(m.renderLogo())
 	right := m.styles.HeaderCount.Width(rightW).Render(openText)
 
-	// Fill the gap between the two panels with blank space so the count lands
-	// at the top-right corner.
-	gapW := width - lipgloss.Width(left) - lipgloss.Width(right)
+	// The filter boxes match the header height: content height = total − border.
+	contentH := lipgloss.Height(left) - 2
+	if contentH < 1 {
+		contentH = 1
+	}
+	projBox := m.renderFilterBox("projects", m.projectKeys(), m.filter.projectCursor,
+		m.filter.offProjects, m.filter.focus == focusProjects, contentH)
+	ctxBox := m.renderFilterBox("contexts", m.contextKeys(), m.filter.contextCursor,
+		m.filter.offContexts, m.filter.focus == focusContexts, contentH)
+
+	// Fill the gap between the filter boxes and the count so the count lands at
+	// the top-right corner.
+	used := lipgloss.Width(left) + lipgloss.Width(projBox) + lipgloss.Width(ctxBox) + lipgloss.Width(right)
+	gapW := width - used
 	if gapW < 0 {
 		gapW = 0
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", gapW), right)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, projBox, ctxBox, strings.Repeat(" ", gapW), right)
+}
+
+// renderFilterBox renders one header filter box: a dim title line followed by a
+// checkbox row per key ("[x]" selected, "[ ]" deselected). When focused, the box
+// gets an accent border and its cursor row is highlighted. Rows scroll to keep
+// the cursor visible when they exceed contentH.
+func (m Model) renderFilterBox(title string, keys []string, cursor int, off map[string]bool, focused bool, contentH int) string {
+	innerW := lipgloss.Width(title)
+	for _, k := range keys {
+		if w := lipgloss.Width(filterMarkOff + " " + filterRowLabel(k)); w > innerW {
+			innerW = w
+		}
+	}
+	if innerW > 16 {
+		innerW = 16
+	}
+	if innerW < 6 {
+		innerW = 6
+	}
+
+	visible := contentH - 1 // the title takes one line
+	if visible < 1 {
+		visible = 1
+	}
+	start := 0
+	if cursor >= visible {
+		start = cursor - visible + 1
+	}
+	end := start + visible
+	if end > len(keys) {
+		end = len(keys)
+	}
+
+	var b strings.Builder
+	b.WriteString(m.styles.FilterTitle.Render(truncateRight(title, innerW)))
+	for i := start; i < end; i++ {
+		b.WriteByte('\n')
+		selected := !off[keys[i]]
+		label := filterRowLabel(keys[i])
+		if focused && i == cursor {
+			// Highlighted row: draw the whole line in the inverse style so the
+			// mark and label share the selection bar.
+			mark := filterMarkOff
+			if selected {
+				mark = filterMarkOn
+			}
+			b.WriteString(m.styles.Selected.Width(innerW).Render(truncateRight(mark+" "+label, innerW)))
+		} else {
+			mark := m.styles.FilterMarkOff.Render(filterMarkOff)
+			if selected {
+				mark = m.styles.FilterMarkOn.Render(filterMarkOn)
+			}
+			content := mark + " " + truncateRight(label, innerW-2)
+			b.WriteString(lipgloss.NewStyle().Width(innerW).Render(content))
+		}
+	}
+
+	style := m.styles.FilterBox
+	if focused {
+		style = m.styles.FilterBoxActive
+	}
+	// Rows are already padded to innerW, so let the box size to its content;
+	// setting an explicit Width here would fight the border/padding and wrap rows.
+	return style.Height(contentH).Render(b.String())
+}
+
+// Filter checkbox marks: a filled circle for a selected row, a hollow one for a
+// deselected row (deliberately not the ✓ used for done todos).
+const (
+	filterMarkOn  = "●"
+	filterMarkOff = "○"
+)
+
+// filterRowLabel is the display text for a filter key: the "(none)" row reuses
+// the "—" placeholder shown for empty detail fields; otherwise the tag name.
+func filterRowLabel(key string) string {
+	if key == noneKey {
+		return "—"
+	}
+	return key
 }
 
 // renderLogo returns the ASCII art "heute" with a left-to-right gradient

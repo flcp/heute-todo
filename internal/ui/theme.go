@@ -117,32 +117,37 @@ func paletteFor(name string) Palette {
 // Styles holds every lipgloss style the view renders with, derived from a
 // Palette by buildStylesWithPalette.
 type Styles struct {
-	HeaderName  lipgloss.Style
-	HeaderLogo  lipgloss.Style
-	HeaderPath  lipgloss.Style
-	HeaderCount lipgloss.Style
-	CommandLine lipgloss.Style
-	TodoPanel   lipgloss.Style
-	SidePanel   lipgloss.Style
-	Separator   lipgloss.Style
-	DetailTitle lipgloss.Style
-	DetailLabel lipgloss.Style
-	Selected    lipgloss.Style
-	Done        lipgloss.Style
-	DoneIcon    lipgloss.Style
-	RowIcon     lipgloss.Style
-	RowMeta     lipgloss.Style
-	Empty       lipgloss.Style
-	Help        lipgloss.Style
-	HelpKey     lipgloss.Style
-	Insert      lipgloss.Style
-	Err         lipgloss.Style
-	Delete      lipgloss.Style
-	PathInline  lipgloss.Style   // path text inside the footer bar (no border)
-	DateCreated lipgloss.Style   // creation date value in the detail panel
-	DateDone    lipgloss.Style   // completion date value in the detail panel
-	LogoRainbow []lipgloss.Color // gradient stops for the ASCII art logo
-	Priority    []lipgloss.Style // indexed by priority letter (A=0, B=1, …)
+	HeaderName      lipgloss.Style
+	HeaderLogo      lipgloss.Style
+	HeaderPath      lipgloss.Style
+	HeaderCount     lipgloss.Style
+	CommandLine     lipgloss.Style
+	FilterBox       lipgloss.Style // header-height filter panel (unfocused)
+	FilterBoxActive lipgloss.Style // filter panel with focus (accent border)
+	FilterTitle     lipgloss.Style // dim label inside a filter box
+	FilterMarkOn    lipgloss.Style // selected checkbox mark
+	FilterMarkOff   lipgloss.Style // deselected checkbox mark
+	TodoPanel       lipgloss.Style
+	SidePanel       lipgloss.Style
+	Separator       lipgloss.Style
+	DetailTitle     lipgloss.Style
+	DetailLabel     lipgloss.Style
+	Selected        lipgloss.Style
+	Done            lipgloss.Style
+	DoneIcon        lipgloss.Style
+	RowIcon         lipgloss.Style
+	RowMeta         lipgloss.Style
+	Empty           lipgloss.Style
+	Help            lipgloss.Style
+	HelpKey         lipgloss.Style
+	Insert          lipgloss.Style
+	Err             lipgloss.Style
+	Delete          lipgloss.Style
+	PathInline      lipgloss.Style   // path text inside the footer bar (no border)
+	DateCreated     lipgloss.Style   // creation date value in the detail panel
+	DateDone        lipgloss.Style   // completion date value in the detail panel
+	LogoRainbow     []lipgloss.Color // gradient stops for the ASCII art logo
+	Priority        []lipgloss.Style // indexed by priority letter (A=0, B=1, …)
 }
 
 // buildStylesWithPalette builds the view's styles from a palette.
@@ -165,30 +170,35 @@ func buildStylesWithPalette(p Palette) Styles {
 			Bold(true).
 			Align(lipgloss.Right).
 			Foreground(p.Success),
-		CommandLine: headerBase,
-		TodoPanel:   lipgloss.NewStyle().PaddingRight(2),
-		SidePanel: lipgloss.NewStyle().PaddingLeft(2).Foreground(p.Info),
-		Separator: lipgloss.NewStyle().Foreground(p.Border),
-		DetailTitle: lipgloss.NewStyle().Bold(true).Foreground(p.Accent),
-		DetailLabel: lipgloss.NewStyle().Bold(true).Foreground(p.Success),
+		CommandLine:     headerBase,
+		FilterBox:       headerBase,
+		FilterBoxActive: headerBase.BorderForeground(p.Accent),
+		FilterTitle:     lipgloss.NewStyle().Faint(true).Foreground(p.Info),
+		FilterMarkOn:    lipgloss.NewStyle().Foreground(p.Border),
+		FilterMarkOff:   lipgloss.NewStyle().Foreground(p.Border),
+		TodoPanel:       lipgloss.NewStyle().PaddingRight(2),
+		SidePanel:       lipgloss.NewStyle().PaddingLeft(2).Foreground(p.Info),
+		Separator:       lipgloss.NewStyle().Foreground(p.Border),
+		DetailTitle:     lipgloss.NewStyle().Bold(true).Foreground(p.Accent),
+		DetailLabel:     lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(p.SelectionFg).
 			Background(p.SelectionBg),
-		Done:     lipgloss.NewStyle().Foreground(p.Done),
-		DoneIcon: lipgloss.NewStyle().Foreground(p.DoneIcon),
-		RowIcon:  lipgloss.NewStyle().Foreground(p.Border),
-		RowMeta:  lipgloss.NewStyle().Foreground(p.Border),
-		Empty:    lipgloss.NewStyle().Faint(true),
-		Help:     lipgloss.NewStyle().Foreground(p.Border),
-		HelpKey:  lipgloss.NewStyle().Faint(true),
-		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
-		Err:      lipgloss.NewStyle().Bold(true).Foreground(p.Error),
-		Delete:   lipgloss.NewStyle().Bold(true).Foreground(p.Danger),
+		Done:        lipgloss.NewStyle().Foreground(p.Done),
+		DoneIcon:    lipgloss.NewStyle().Foreground(p.DoneIcon),
+		RowIcon:     lipgloss.NewStyle().Foreground(p.Border),
+		RowMeta:     lipgloss.NewStyle().Foreground(p.Border),
+		Empty:       lipgloss.NewStyle().Faint(true),
+		Help:        lipgloss.NewStyle().Foreground(p.Border),
+		HelpKey:     lipgloss.NewStyle().Faint(true),
+		Insert:      lipgloss.NewStyle().Bold(true).Foreground(p.Success),
+		Err:         lipgloss.NewStyle().Bold(true).Foreground(p.Error),
+		Delete:      lipgloss.NewStyle().Bold(true).Foreground(p.Danger),
 		PathInline:  lipgloss.NewStyle().Foreground(p.Info).Faint(true),
 		DateCreated: lipgloss.NewStyle().Foreground(p.Info),
 		DateDone:    lipgloss.NewStyle().Foreground(p.DoneIcon),
 		LogoRainbow: p.LogoRainbow,
-		Priority: priority,
+		Priority:    priority,
 	}
 }
