@@ -142,6 +142,12 @@ func (m Model) renderDetail() string {
 	}
 	b.WriteString(m.detailField("Due date", due, active(fieldDue)))
 
+	details := " "
+	if d, ok := t.Tags["details"]; ok {
+		details = d
+	}
+	b.WriteString(m.detailField("Details", details, active(fieldDetails)))
+
 	if t.CreatedAt != nil {
 		b.WriteString(m.styles.DetailLabel.Render("Created:") + " " + m.styles.DateCreated.Render(t.CreatedAt.Format(todotxt.DateLayout)) + "\n")
 	}
@@ -185,21 +191,12 @@ func detailTitle(t todotxt.Todo) string {
 // each with the original token order preserved.
 func splitDescription(desc string) (title, meta string) {
 	var titleWords, metaWords []string
-	for _, tok := range strings.Fields(desc) {
+	for _, tok := range todotxt.Fields(desc) {
 		switch {
 		case len(tok) > 1 && (tok[0] == '+' || tok[0] == '@'):
 			metaWords = append(metaWords, tok)
-		case strings.ContainsRune(tok, ':') && !strings.ContainsAny(tok, " "):
-			if i := strings.IndexByte(tok, ':'); i > 0 && i < len(tok)-1 {
-				// Exclude URLs: value part starts with "//" (e.g. https://…).
-				if strings.HasPrefix(tok[i+1:], "//") {
-					titleWords = append(titleWords, tok)
-					continue
-				}
-				metaWords = append(metaWords, tok)
-				continue
-			}
-			titleWords = append(titleWords, tok)
+		case isKeyValue(tok):
+			metaWords = append(metaWords, tok)
 		default:
 			titleWords = append(titleWords, tok)
 		}

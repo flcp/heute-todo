@@ -43,6 +43,23 @@ func TestParseIncompleteTaskWithAllDetails(t *testing.T) {
 	}
 }
 
+func TestParseQuotedDetailsTag(t *testing.T) {
+	line := `Buy milk details:"lorem ipsum dolor" @home`
+	got, ok := Parse(line)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if got.Tags["details"] != "lorem ipsum dolor" {
+		t.Errorf("details = %q, want %q", got.Tags["details"], "lorem ipsum dolor")
+	}
+	if len(got.Contexts) != 1 || got.Contexts[0] != "home" {
+		t.Errorf("contexts = %v, want [home]", got.Contexts)
+	}
+	if got.String() != line {
+		t.Errorf("round-trip = %q, want %q", got.String(), line)
+	}
+}
+
 func TestParseCompletedTaskWithBothDates(t *testing.T) {
 	line := "x 2026-09-18 2026-09-17 Do the thing"
 	got, ok := Parse(line)

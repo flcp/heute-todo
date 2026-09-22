@@ -102,7 +102,7 @@ func leadingDate(s string) (*time.Time, string, bool) {
 // extractTokens pulls projects, contexts and key:value tags from a description.
 func extractTokens(desc string) (projects, contexts []string, tags map[string]string) {
 	tags = map[string]string{}
-	for _, tok := range strings.Fields(desc) {
+	for _, tok := range Fields(desc) {
 		switch {
 		case len(tok) > 1 && tok[0] == '+':
 			projects = append(projects, tok[1:])
@@ -117,14 +117,54 @@ func extractTokens(desc string) (projects, contexts []string, tags map[string]st
 	return projects, contexts, tags
 }
 
-// splitTag splits a "key:value" token. Both key and value must be non-empty and
-// contain no additional colon-delimited emptiness.
+// Fields splits a description into whitespace-delimited tokens, keeping a
+// double-quoted value in a key:"..." tag together as a single token so it may
+// contain spaces (e.g. details:"lorem ipsum"). Quotes elsewhere are treated as
+// ordinary characters.
+func Fields(desc string) []string {
+	runes := []rune(desc)
+	var toks []string
+	i, n := 0, len(runes)
+	for i < n {
+		for i < n && runes[i] == ' ' {
+			i++
+		}
+		if i >= n {
+			break
+		}
+		start := i
+		for i < n && runes[i] != ' ' {
+			// An opening quote right after a "key:" prefix starts a quoted
+			// value: consume through the closing quote, spaces included.
+			if runes[i] == '"' && i > start && runes[i-1] == ':' {
+				i++ // opening quote
+				for i < n && runes[i] != '"' {
+					i++
+				}
+				if i < n {
+					i++ // closing quote
+				}
+				break
+			}
+			i++
+		}
+		toks = append(toks, string(runes[start:i]))
+	}
+	return toks
+}
+
+// splitTag splits a "key:value" token. Both key and value must be non-empty,
+// except a double-quoted value (which may be empty and may contain spaces).
 func splitTag(tok string) (key, value string, ok bool) {
 	i := strings.IndexByte(tok, ':')
 	if i <= 0 || i == len(tok)-1 {
 		return "", "", false
 	}
 	key, value = tok[:i], tok[i+1:]
+	// A double-quoted value may contain spaces (e.g. details:"lorem ipsum").
+	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+		return key, value[1 : len(value)-1], true
+	}
 	if strings.ContainsRune(value, ' ') {
 		return "", "", false
 	}

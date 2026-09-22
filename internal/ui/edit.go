@@ -15,7 +15,9 @@ type token struct {
 }
 
 // scanTokens splits value into whitespace-delimited tokens, recording each
-// token's rune span into value.
+// token's rune span into value. A double-quoted value in a key:"..." tag is
+// kept together (spaces included) so fields like details:"lorem ipsum" tokenize
+// as one unit, mirroring todotxt.Fields.
 func scanTokens(value string) []token {
 	runes := []rune(value)
 	var toks []token
@@ -29,6 +31,16 @@ func scanTokens(value string) []token {
 		}
 		start := i
 		for i < len(runes) && runes[i] != ' ' {
+			if runes[i] == '"' && i > start && runes[i-1] == ':' {
+				i++ // opening quote
+				for i < len(runes) && runes[i] != '"' {
+					i++
+				}
+				if i < len(runes) {
+					i++ // closing quote
+				}
+				break
+			}
 			i++
 		}
 		toks = append(toks, token{start: start, end: i, text: string(runes[start:i])})
@@ -40,9 +52,9 @@ func scanTokens(value string) []token {
 // buffer (-1 when absent). descStart is the token index where the description
 // begins, after the leading completion marker, priority and dates.
 type bufferInfo struct {
-	toks                                   []token
-	priority, project, context, due, title int
-	descStart                              int
+	toks                                            []token
+	priority, project, context, due, details, title int
+	descStart                                       int
 }
 
 // classifyBuffer locates each field within a raw todo.txt edit buffer. The
@@ -115,6 +127,10 @@ func locateField(value string, f editField) (cursorPos int, present bool) {
 		if info.due != -1 {
 			return info.toks[info.due].start + len("due:"), true // after "due:"
 		}
+	case fieldDetails:
+		if info.details != -1 {
+			return info.toks[info.details].start + len(`details:"`), true // inside the quotes
+		}
 	}
 	return end, false
 }
@@ -135,6 +151,8 @@ func ensureField(value string, f editField) (newValue string, cursorPos int) {
 		return appendScaffold(value, "@")
 	case fieldDue:
 		return appendScaffold(value, "due:")
+	case fieldDetails:
+		return scaffoldDetails(value)
 	}
 	// Title (or any non-scaffolding field): keep value, use the fallback pos.
 	pos, _ := locateField(value, f)
@@ -169,10 +187,21 @@ func scaffoldPriority(value string) (string, int) {
 	return "(A) " + value, 1
 }
 
+// scaffoldDetails appends an empty details:"" tag and returns the cursor
+// between the quotes, ready for a (possibly multi-word) value.
+func scaffoldDetails(value string) (string, int) {
+	base := strings.TrimRight(value, " ")
+	if base == "" {
+		return `details:""`, len([]rune(`details:""`)) - 1
+	}
+	nv := base + ` details:""`
+	return nv, len([]rune(nv)) - 1
+}
+
 // stripEmptyField removes field f's token from value (collapsing surrounding
 // whitespace to single spaces) when that field is an empty scaffold: a bare
-// "+", "@", "due:" or a malformed "()" priority. The title is never removed and
-// a filled field is left untouched.
+// "+", "@", "due:", details:"" or a malformed "()" priority. The title is never
+// removed and a filled field is left untouched.
 func stripEmptyField(value string, f editField) string {
 	toks := scanTokens(value)
 	idx := emptyFieldTokenIndex(toks, f)
@@ -213,6 +242,10 @@ func emptyFieldTokenIndex(toks []token, f editField) int {
 		if info.due != -1 && toks[info.due].text == "due:" {
 			return info.due
 		}
+	case fieldDetails:
+		if info.details != -1 && toks[info.details].text == `details:""` {
+			return info.details
+		}
 	}
 	return -1
 }
@@ -220,7 +253,7 @@ func emptyFieldTokenIndex(toks []token, f editField) int {
 // bufferInfoFromTokens classifies an already-tokenized buffer, so callers with
 // tokens in hand avoid re-scanning.
 func bufferInfoFromTokens(toks []token) bufferInfo {
-	info := bufferInfo{toks: toks, priority: -1, project: -1, context: -1, due: -1, title: -1}
+	info := bufferInfo{toks: toks, priority: -1, project: -1, context: -1, due: -1, details: -1, title: -1}
 	i := 0
 	if i < len(toks) && toks[i].text == "x" {
 		i++
@@ -247,6 +280,10 @@ func bufferInfoFromTokens(toks []token) bufferInfo {
 		case strings.HasPrefix(t, "due:"):
 			if info.due == -1 {
 				info.due = i
+			}
+		case strings.HasPrefix(t, "details:"):
+			if info.details == -1 {
+				info.details = i
 			}
 		case isKeyValue(t):
 		default:

@@ -61,11 +61,12 @@ const (
 	fieldProject
 	fieldContext
 	fieldDue
+	fieldDetails
 )
 
 // editFieldOrder is the Tab cycle through the detail panel's editable fields.
 // Created/Done dates are shown but are read-only and skipped.
-var editFieldOrder = []editField{fieldTitle, fieldPriority, fieldProject, fieldContext, fieldDue}
+var editFieldOrder = []editField{fieldTitle, fieldPriority, fieldProject, fieldContext, fieldDue, fieldDetails}
 
 // advanceField returns the field after (forward) or before f in editFieldOrder,
 // wrapping around the ends.

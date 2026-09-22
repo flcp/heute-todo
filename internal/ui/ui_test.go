@@ -355,6 +355,62 @@ func TestStripEmptyField(t *testing.T) {
 	}
 }
 
+func TestQuotedDetailsField(t *testing.T) {
+	const line = `Buy milk details:"lorem ipsum"`
+
+	pos, ok := locateField(line, fieldDetails)
+	if !ok {
+		t.Fatal("details should be present")
+	}
+	if want := strings.Index(line, `details:"`) + len(`details:"`); pos != want {
+		t.Fatalf("details pos = %d, want %d (inside the quotes)", pos, want)
+	}
+
+	// A missing details field scaffolds an empty quoted tag with the cursor
+	// between the quotes.
+	v, cpos := ensureField("Buy milk", fieldDetails)
+	if v != `Buy milk details:""` {
+		t.Fatalf("details scaffold = %q, want %q", v, `Buy milk details:""`)
+	}
+	if cpos != len([]rune(v))-1 {
+		t.Fatalf("cursor = %d, want %d (between the quotes)", cpos, len([]rune(v))-1)
+	}
+
+	// A filled quoted value with spaces survives an empty-scaffold strip.
+	if got := stripEmptyField(line, fieldDetails); got != line {
+		t.Errorf("strip filled details = %q, want unchanged", got)
+	}
+	// An empty quoted scaffold is dropped.
+	if got := stripEmptyField(`Buy milk details:""`, fieldDetails); got != "Buy milk" {
+		t.Errorf("strip empty details = %q, want \"Buy milk\"", got)
+	}
+}
+
+func TestDetailsFieldRoundTrips(t *testing.T) {
+	m := testModel(0)
+	m = step(m, key("o"))
+	m = step(m, key("Buy milk"))
+	// Title -> Priority -> Project -> Context -> Due -> Details.
+	for i := 0; i < 5; i++ {
+		m = step(m, tab())
+	}
+	if m.editState.field != fieldDetails {
+		t.Fatalf("field = %d, want fieldDetails", m.editState.field)
+	}
+	m = step(m, key("lorem ipsum")) // multi-word value, typed between the quotes
+	m = step(m, enter())
+
+	if len(m.todos) != 1 {
+		t.Fatalf("len = %d, want 1", len(m.todos))
+	}
+	if got := m.todos[0].Tags["details"]; got != "lorem ipsum" {
+		t.Fatalf("details tag = %q, want \"lorem ipsum\"", got)
+	}
+	if !strings.Contains(m.todos[0].Description, `details:"lorem ipsum"`) {
+		t.Fatalf("description = %q, want it to contain the quoted details tag", m.todos[0].Description)
+	}
+}
+
 func TestTabCyclesFieldsAndJumpsCursor(t *testing.T) {
 	m := testModel(1)
 	todo, _ := todotxt.Parse("(A) Buy milk +errands @home due:2026-10-10")
@@ -373,7 +429,11 @@ func TestTabCyclesFieldsAndJumpsCursor(t *testing.T) {
 	if pos, _ := locateField(m.editState.input.Value(), fieldDue); m.editState.input.Position() != pos {
 		t.Fatalf("cursor = %d, want due value at %d", m.editState.input.Position(), pos)
 	}
-	m = step(m, tab()) // wraps back to the title
+	m = step(m, tab()) // due -> details
+	if m.editState.field != fieldDetails {
+		t.Fatalf("field = %d, want fieldDetails", m.editState.field)
+	}
+	m = step(m, tab()) // details -> wraps back to the title
 	if m.editState.field != fieldTitle {
 		t.Fatalf("field = %d, want wrap to fieldTitle", m.editState.field)
 	}
