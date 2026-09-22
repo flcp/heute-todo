@@ -592,3 +592,56 @@ func TestFilterSoloSelectsOnlyCursorRow(t *testing.T) {
 		t.Fatal("the only visible todo should be +errands")
 	}
 }
+
+func TestDigitToPriorityMiddleOfWindow(t *testing.T) {
+	// Digit 0's window is A–C, so it maps to the middle letter B (not A).
+	if got := digitToPriority(0); got != 'B' {
+		t.Fatalf("digitToPriority(0) = %q, want 'B'", got)
+	}
+	// Every digit must round-trip back through priorityToDigit.
+	for d := 0; d <= 9; d++ {
+		if got := priorityToDigit(digitToPriority(d)); got != d {
+			t.Errorf("priorityToDigit(digitToPriority(%d)) = %d, want %d", d, got, d)
+		}
+	}
+}
+
+func TestDigitKeySetsPriority(t *testing.T) {
+	m := filterModel("write the report")
+	next, cmd := m.Update(key("0"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("setting priority should trigger an autosave")
+	}
+	if m.todos[0].Priority != 'B' {
+		t.Fatalf("priority = %q, want 'B' (middle of digit 0's window)", m.todos[0].Priority)
+	}
+	// A higher digit maps to a later letter.
+	m = step(m, key("9"))
+	if m.todos[0].Priority != digitToPriority(9) {
+		t.Fatalf("priority = %q, want %q", m.todos[0].Priority, digitToPriority(9))
+	}
+}
+
+func TestToggleHideDone(t *testing.T) {
+	m := filterModel("open one", "x done two", "open three")
+	if m.visibleCount() != 3 {
+		t.Fatalf("initial visible = %d, want 3", m.visibleCount())
+	}
+	m = step(m, key("z")) // hide done
+	if !m.filter.hideDone {
+		t.Fatal("z should enable hideDone")
+	}
+	if m.visibleCount() != 2 {
+		t.Fatalf("visible = %d, want 2 with done hidden", m.visibleCount())
+	}
+	for _, i := range m.displayIndices() {
+		if m.todos[i].Done {
+			t.Fatal("no done task should be visible")
+		}
+	}
+	m = step(m, key("z")) // show again
+	if m.filter.hideDone || m.visibleCount() != 3 {
+		t.Fatalf("z again should show done: hideDone=%v visible=%d", m.filter.hideDone, m.visibleCount())
+	}
+}

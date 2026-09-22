@@ -71,7 +71,7 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.enterEditMode()
 		return m, cmd
-	case "a":
+	case "a", "enter":
 		if len(m.todos) == 0 {
 			return m, nil
 		}
@@ -101,6 +101,21 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "s":
 		m.cycleSortMode()
 		return m, nil
+	case "z":
+		m.filter.hideDone = !m.filter.hideDone
+		if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
+			if last < 0 {
+				last = 0
+			}
+			m.normalState.cursorPosition = last
+		}
+		return m, nil
+	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		if len(m.todos) == 0 {
+			return m, nil
+		}
+		cmd := m.setPriority(digitToPriority(int(key.String()[0] - '0')))
+		return m, cmd
 	}
 	return m, nil
 }
@@ -375,6 +390,15 @@ func (m *Model) enterEditMode() tea.Cmd {
 	pos, _ := locateField(value, fieldTitle)
 	m.editState.input.SetCursor(pos)
 	return m.editState.input.Focus()
+}
+
+// setPriority sets the priority letter of the selected todo, keeps the cursor on
+// it after any re-sort, and persists.
+func (m *Model) setPriority(p byte) tea.Cmd {
+	i := m.cursorSourceIndex()
+	m.todos[i].Priority = p
+	m.normalState.cursorPosition = m.displayIndexOf(i)
+	return m.saveCmd()
 }
 
 // toggleDone flips the done state of the selected todo (stamping or clearing the

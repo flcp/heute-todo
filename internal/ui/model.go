@@ -74,6 +74,7 @@ type filterState struct {
 	contextCursor int
 	offProjects   map[string]bool
 	offContexts   map[string]bool
+	hideDone      bool // hide completed tasks from the list
 }
 
 // editField identifies a field in the detail panel that edit mode can jump the
@@ -208,6 +209,9 @@ func tagKeys(todos []todotxt.Todo, tagsOf func(todotxt.Todo) []string) []string 
 // A dimension passes when any of the todo's keys in that dimension (its tags, or
 // the "(none)" key when it has none) is currently selected.
 func (m Model) passesFilter(t todotxt.Todo) bool {
+	if m.filter.hideDone && t.Done {
+		return false
+	}
 	return passesDimension(t.Projects, m.filter.offProjects) &&
 		passesDimension(t.Contexts, m.filter.offContexts)
 }

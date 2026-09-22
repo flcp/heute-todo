@@ -72,11 +72,13 @@ func (m Model) renderCommandLine() string {
 			m.helpItem("o", "add"),
 			// m.helpItem("i/I/a", "edit"),
 			m.helpItem("a", "edit"),
+			m.helpItem("0-9", "priority"),
 			m.helpItem("d", "delete"),
 		}
 		misc := []string{
 			m.helpItem("⇥", "filter"),
 			m.helpItem("s", "sort"),
+			m.helpItem("z", "done"),
 			m.helpItem("q", "quit"),
 		}
 		sep := m.styles.Help.Render("  ·  ")
@@ -295,18 +297,49 @@ func (m Model) renderBody() string {
 // renderHeader lays out the top bar: the ASCII art logo on the left and the
 // open-task count on the right, with empty space between them.
 func (m Model) renderHeader() string {
-	open := 0
-	for _, t := range m.todos {
-		if !t.Done {
-			open++
-		}
-	}
-
 	width := m.width
 	if width <= 0 {
 		width = 80
 	}
 
+	// logoW is the max line width of the ASCII art; +2 adds the horizontal padding.
+	const logoW = 24
+	left := m.styles.HeaderLogo.Width(logoW + 2).Render(m.renderLogo())
+
+	// The status box and filter boxes match the header height:
+	// content height = total − border.
+	contentH := lipgloss.Height(left) - 2
+	if contentH < 1 {
+		contentH = 1
+	}
+	status := m.renderStatusBox(contentH)
+
+	// Stretch the two filter boxes to fill the space between the logo and the
+	// status box, split evenly. A box's total width is its text width (innerW)
+	// plus 2 padding + 2 border columns.
+	avail := width - lipgloss.Width(left) - lipgloss.Width(status)
+	innerW := avail/2 - 4
+	if innerW < 6 {
+		innerW = 6
+	}
+	projBox := m.renderFilterBox("projects", m.projectKeys(), m.filter.projectCursor,
+		m.filter.offProjects, m.filter.focus == focusProjects, contentH, innerW)
+	ctxBox := m.renderFilterBox("contexts", m.contextKeys(), m.filter.contextCursor,
+		m.filter.offContexts, m.filter.focus == focusContexts, contentH, innerW)
+
+	// Any rounding remainder becomes a thin gap before the right-aligned status box.
+	used := lipgloss.Width(left) + lipgloss.Width(projBox) + lipgloss.Width(ctxBox) + lipgloss.Width(status)
+	gapW := width - used
+	if gapW < 0 {
+		gapW = 0
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, projBox, ctxBox, strings.Repeat(" ", gapW), status)
+}
+
+// renderStatusBox renders the top-right settings panel (matched to the header
+// height): the current sort mode and whether done tasks are shown or hidden.
+func (m Model) renderStatusBox(contentH int) string {
 	sortLabel := "file"
 	switch m.sort {
 	case sortPriority:
@@ -314,51 +347,30 @@ func (m Model) renderHeader() string {
 	case sortName:
 		sortLabel = "name"
 	}
-	openText := fmt.Sprintf("%d open · %s", open, sortLabel)
-
-	// logoW is the max line width of the ASCII art; +2 adds the horizontal padding.
-	const logoW = 24
-	leftW := logoW + 2
-	rightW := lipgloss.Width(openText) + 2
-
-	left := m.styles.HeaderLogo.Width(leftW).Render(m.renderLogo())
-	right := m.styles.HeaderCount.Width(rightW).Render(openText)
-
-	// The filter boxes match the header height: content height = total − border.
-	contentH := lipgloss.Height(left) - 2
-	if contentH < 1 {
-		contentH = 1
-	}
-	projBox := m.renderFilterBox("projects", m.projectKeys(), m.filter.projectCursor,
-		m.filter.offProjects, m.filter.focus == focusProjects, contentH)
-	ctxBox := m.renderFilterBox("contexts", m.contextKeys(), m.filter.contextCursor,
-		m.filter.offContexts, m.filter.focus == focusContexts, contentH)
-
-	// Fill the gap between the filter boxes and the count so the count lands at
-	// the top-right corner.
-	used := lipgloss.Width(left) + lipgloss.Width(projBox) + lipgloss.Width(ctxBox) + lipgloss.Width(right)
-	gapW := width - used
-	if gapW < 0 {
-		gapW = 0
+	doneLabel := "show"
+	if m.filter.hideDone {
+		doneLabel = "hide"
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, projBox, ctxBox, strings.Repeat(" ", gapW), right)
+	w := 0
+	for _, s := range []string{"sort: " + sortLabel, "done: " + doneLabel} {
+		if lw := lipgloss.Width(s); lw > w {
+			w = lw
+		}
+	}
+	line := func(label, value string) string {
+		return lipgloss.NewStyle().Width(w).Render(m.styles.FilterTitle.Render(label) + m.styles.Insert.Render(value))
+	}
+	content := line("sort: ", sortLabel) + "\n" + line("done: ", doneLabel)
+	return m.styles.FilterBox.Height(contentH).Render(content)
 }
 
 // renderFilterBox renders one header filter box: a dim title line followed by a
-// checkbox row per key ("[x]" selected, "[ ]" deselected). When focused, the box
-// gets an accent border and its cursor row is highlighted. Rows scroll to keep
-// the cursor visible when they exceed contentH.
-func (m Model) renderFilterBox(title string, keys []string, cursor int, off map[string]bool, focused bool, contentH int) string {
-	innerW := lipgloss.Width(title)
-	for _, k := range keys {
-		if w := lipgloss.Width(filterMarkOff + " " + filterRowLabel(k)); w > innerW {
-			innerW = w
-		}
-	}
-	if innerW > 16 {
-		innerW = 16
-	}
+// checkbox row per key (● selected, ○ deselected). The box is stretched to the
+// given text width; when focused it gets an accent border and its cursor row is
+// highlighted. Rows scroll to keep the cursor visible when they exceed contentH.
+func (m Model) renderFilterBox(title string, keys []string, cursor int, off map[string]bool, focused bool, contentH, width int) string {
+	innerW := width
 	if innerW < 6 {
 		innerW = 6
 	}
@@ -611,4 +623,24 @@ func (m Model) helpItem(key, action string) string {
 // priorityToDigit maps a priority byte ('A'..'Z') to a 0–9 display digit.
 func priorityToDigit(p byte) int {
 	return int(p-'A') * 10 / 26
+}
+
+// digitToPriority maps a 0–9 display digit back to a priority letter: the middle
+// letter of the A–Z window that priorityToDigit collapses to that digit (so
+// digit 0, whose window is A–C, becomes B rather than A). It is the inverse of
+// priorityToDigit and stays in sync with it by construction.
+func digitToPriority(d int) byte {
+	lo, hi := -1, -1
+	for i := 0; i < 26; i++ {
+		if priorityToDigit('A'+byte(i)) == d {
+			if lo == -1 {
+				lo = i
+			}
+			hi = i
+		}
+	}
+	if lo == -1 {
+		return 'A'
+	}
+	return 'A' + byte((lo+hi)/2)
 }
