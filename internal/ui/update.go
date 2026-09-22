@@ -245,6 +245,10 @@ func (m *Model) commit() {
 		if index > len(m.todos) {
 			index = len(m.todos)
 		}
+		if newTodo.CreatedAt == nil {
+			now := time.Now()
+			newTodo.CreatedAt = &now
+		}
 		m.todos = append(m.todos, todotxt.Todo{})
 		copy(m.todos[index+1:], m.todos[index:])
 	} else {

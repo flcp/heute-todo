@@ -139,6 +139,8 @@ type Styles struct {
 	Err         lipgloss.Style
 	Delete      lipgloss.Style
 	PathInline  lipgloss.Style   // path text inside the footer bar (no border)
+	DateCreated lipgloss.Style   // creation date value in the detail panel
+	DateDone    lipgloss.Style   // completion date value in the detail panel
 	LogoRainbow []lipgloss.Color // gradient stops for the ASCII art logo
 	Priority    []lipgloss.Style // indexed by priority letter (A=0, B=1, …)
 }
@@ -183,7 +185,9 @@ func buildStylesWithPalette(p Palette) Styles {
 		Insert:   lipgloss.NewStyle().Bold(true).Foreground(p.Success),
 		Err:      lipgloss.NewStyle().Bold(true).Foreground(p.Error),
 		Delete:   lipgloss.NewStyle().Bold(true).Foreground(p.Danger),
-		PathInline: lipgloss.NewStyle().Foreground(p.Info).Faint(true),
+		PathInline:  lipgloss.NewStyle().Foreground(p.Info).Faint(true),
+		DateCreated: lipgloss.NewStyle().Foreground(p.Info),
+		DateDone:    lipgloss.NewStyle().Foreground(p.DoneIcon),
 		LogoRainbow: p.LogoRainbow,
 		Priority: priority,
 	}

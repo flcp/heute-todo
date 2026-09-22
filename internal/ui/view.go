@@ -121,6 +121,13 @@ func (m Model) renderDetail() string {
 	}
 	b.WriteString(m.detailField("Due date", due))
 
+	if t.CreatedAt != nil {
+		b.WriteString(m.styles.DetailLabel.Render("Created:") + " " + m.styles.DateCreated.Render(t.CreatedAt.Format(todotxt.DateLayout)) + "\n")
+	}
+	if t.CompletedAt != nil {
+		b.WriteString(m.styles.DetailLabel.Render("Done:") + " " + m.styles.DateDone.Render(t.CompletedAt.Format(todotxt.DateLayout)) + "\n")
+	}
+
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -399,11 +406,11 @@ func (m Model) renderRow(i int, t todotxt.Todo) string {
 	}
 
 	if t.Done {
-		text := title
+		body := title
 		if meta != "" {
-			text += " " + meta
+			body += " " + meta
 		}
-		return m.styles.DoneIcon.Render("✓") + " " + m.styles.Done.Render(text)
+		return m.styles.DoneIcon.Render("✓") + " " + m.styles.Done.Render(body)
 	}
 
 	var parts []string
