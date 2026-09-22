@@ -211,6 +211,7 @@ func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
 func (m *Model) toggleDone() tea.Cmd {
 	i := m.cursorSourceIndex()
 	m.todos[i] = m.todos[i].Toggled(time.Now())
+	m.normalState.cursorPosition = m.displayIndexOf(i)
 	return m.saveCmd()
 }
 

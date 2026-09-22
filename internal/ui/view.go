@@ -159,8 +159,12 @@ func splitDescription(desc string) (title, meta string) {
 		case len(tok) > 1 && (tok[0] == '+' || tok[0] == '@'):
 			metaWords = append(metaWords, tok)
 		case strings.ContainsRune(tok, ':') && !strings.ContainsAny(tok, " "):
-			// Drop key:value tags (e.g. due:2026-09-20).
 			if i := strings.IndexByte(tok, ':'); i > 0 && i < len(tok)-1 {
+				// Exclude URLs: value part starts with "//" (e.g. https://…).
+				if strings.HasPrefix(tok[i+1:], "//") {
+					titleWords = append(titleWords, tok)
+					continue
+				}
 				metaWords = append(metaWords, tok)
 				continue
 			}
@@ -219,11 +223,12 @@ func (m Model) renderBody() string {
 	if len(m.todos) == 0 {
 		list.WriteString(m.styles.Empty.Render("(no tasks yet)"))
 	}
+	contentW := leftW - 2 // TodoPanel has PaddingRight(2)
 	for dispIdx, srcIdx := range m.displayIndices() {
 		if dispIdx > 0 {
 			list.WriteByte('\n')
 		}
-		list.WriteString(m.renderRow(dispIdx, m.todos[srcIdx]))
+		list.WriteString(m.renderRow(dispIdx, m.todos[srcIdx], contentW))
 	}
 
 	todosPanel := m.styles.TodoPanel.Width(leftW)
@@ -380,13 +385,52 @@ func truncateLeft(s string, max int) string {
 	return "…" + string(r[len(r)-(max-1):])
 }
 
-func (m Model) renderRow(i int, t todotxt.Todo) string {
+// truncateRight shortens s to at most max display columns, dropping characters
+// from the end and appending an ellipsis.
+func truncateRight(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max == 1 {
+		return "…"
+	}
+	return string(r[:max-1]) + "…"
+}
+
+func (m Model) renderRow(i int, t todotxt.Todo, width int) string {
 	title, meta := splitDescription(t.Description)
 	if title == "" {
 		title = t.Description
 	}
 
 	hasPriority := !t.Done && t.Priority >= 'A' && t.Priority <= 'Z'
+
+	// 2 = priority/checkmark slot + space.
+	available := width - 2
+	titleW := lipgloss.Width(title)
+
+	// Stage 1: truncate meta if the full row overflows.
+	if meta != "" && titleW+1+lipgloss.Width(meta) > available {
+		metaAvail := available - titleW - 1
+		if metaAvail >= 2 {
+			meta = truncateRight(meta, metaAvail)
+		} else {
+			meta = ""
+		}
+	}
+
+	// Stage 2: truncate title if it still overflows (meta gone or title itself too wide).
+	titleAvail := available
+	if meta != "" {
+		titleAvail -= 1 + lipgloss.Width(meta)
+	}
+	if titleW > titleAvail {
+		title = truncateRight(title, titleAvail)
+	}
 
 	if i == m.normalState.cursorPosition {
 		var parts []string
