@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/flcp/heute-todo/internal/config"
 	"github.com/flcp/heute-todo/internal/store"
 	"github.com/flcp/heute-todo/internal/todotxt"
 )
@@ -42,6 +43,9 @@ type Model struct {
 	normalState normalState
 	editState   editState
 	filter      filterState
+
+	theme   string // active palette name, persisted to config
+	cfgPath string // todo path recorded in the config (the remembered default)
 
 	styles Styles // active theme's rendered styles
 
@@ -122,7 +126,9 @@ func New(path string) (Model, error) {
 	}
 	return Model{
 		path:      path,
+		cfgPath:   path,
 		todos:     todos,
+		theme:     DefaultTheme,
 		editState: editState{input: newInput()},
 		styles:    buildStylesWithPalette(paletteFor(DefaultTheme)),
 	}, nil
@@ -131,8 +137,52 @@ func New(path string) (Model, error) {
 // WithTheme returns a copy of the model styled with the named theme, falling
 // back to Nord when the name is not registered.
 func (m Model) WithTheme(name string) Model {
+	m.theme = name
 	m.styles = buildStylesWithPalette(paletteFor(name))
 	return m
+}
+
+// WithConfig applies persisted preferences (sort, done visibility, theme) to the
+// model and records the config's todo path so later saves keep the same default.
+func (m Model) WithConfig(cfg config.Config) Model {
+	m.sort = parseSortMode(cfg.Sort)
+	m.filter.hideDone = !cfg.ShowDone
+	m.cfgPath = cfg.Path
+	return m.WithTheme(cfg.Theme)
+}
+
+// toConfig snapshots the model's persistable preferences.
+func (m Model) toConfig() config.Config {
+	return config.Config{
+		Path:     m.cfgPath,
+		Sort:     sortModeName(m.sort),
+		ShowDone: !m.filter.hideDone,
+		Theme:    m.theme,
+	}
+}
+
+// sortModeName / parseSortMode convert between the sortMode enum and its
+// persisted string form.
+func sortModeName(s sortMode) string {
+	switch s {
+	case sortPriority:
+		return "priority"
+	case sortName:
+		return "name"
+	default:
+		return "file"
+	}
+}
+
+func parseSortMode(s string) sortMode {
+	switch s {
+	case "priority":
+		return sortPriority
+	case "name":
+		return sortName
+	default:
+		return sortFree
+	}
 }
 
 // newInput builds the textinput used to add and edit todos in insert mode.

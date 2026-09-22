@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/flcp/heute-todo/internal/config"
 	"github.com/flcp/heute-todo/internal/todotxt"
 )
 
@@ -643,5 +644,25 @@ func TestToggleHideDone(t *testing.T) {
 	m = step(m, key("z")) // show again
 	if m.filter.hideDone || m.visibleCount() != 3 {
 		t.Fatalf("z again should show done: hideDone=%v visible=%d", m.filter.hideDone, m.visibleCount())
+	}
+}
+
+func TestWithConfigAppliesPreferences(t *testing.T) {
+	m := testModel(0).WithConfig(config.Config{
+		Path: "/tmp/x.txt", Sort: "priority", ShowDone: false, Theme: "default",
+	})
+	if m.sort != sortPriority {
+		t.Errorf("sort = %d, want sortPriority", m.sort)
+	}
+	if !m.filter.hideDone {
+		t.Error("ShowDone:false should set hideDone")
+	}
+	if m.theme != "default" {
+		t.Errorf("theme = %q, want default", m.theme)
+	}
+	// toConfig should round-trip the applied preferences.
+	got := m.toConfig()
+	if got.Sort != "priority" || got.ShowDone != false || got.Theme != "default" || got.Path != "/tmp/x.txt" {
+		t.Fatalf("toConfig = %+v", got)
 	}
 }

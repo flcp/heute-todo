@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/flcp/heute-todo/internal/config"
 	"github.com/flcp/heute-todo/internal/store"
 	"github.com/flcp/heute-todo/internal/todotxt"
 )
@@ -14,6 +15,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case savedMsg:
 		m.err = msg.err
+		return m, nil
+	case configSavedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -100,7 +106,7 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "s":
 		m.cycleSortMode()
-		return m, nil
+		return m, m.saveConfigCmd()
 	case "z":
 		m.filter.hideDone = !m.filter.hideDone
 		if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
@@ -109,7 +115,7 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.normalState.cursorPosition = last
 		}
-		return m, nil
+		return m, m.saveConfigCmd()
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if len(m.todos) == 0 {
 			return m, nil
@@ -480,5 +486,17 @@ func (m Model) saveCmd() tea.Cmd {
 	copy(snapshot, m.todos)
 	return func() tea.Msg {
 		return savedMsg{err: store.Save(path, snapshot)}
+	}
+}
+
+// configSavedMsg reports the result of persisting the config.
+type configSavedMsg struct{ err error }
+
+// saveConfigCmd persists the model's current preferences (sort, done visibility,
+// theme, path) to the config file off the update loop.
+func (m Model) saveConfigCmd() tea.Cmd {
+	cfg := m.toConfig()
+	return func() tea.Msg {
+		return configSavedMsg{err: config.Save(cfg)}
 	}
 }
