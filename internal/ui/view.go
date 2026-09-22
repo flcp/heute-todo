@@ -352,17 +352,25 @@ func (m Model) renderStatusBox(contentH int) string {
 		doneLabel = "hide"
 	}
 
-	w := 0
-	for _, s := range []string{"sort: " + sortLabel, "done: " + doneLabel} {
-		if lw := lipgloss.Width(s); lw > w {
+	rows := [][2]string{{"sort: ", sortLabel}, {"done: ", doneLabel}}
+	// Width the box to its content plus a little breathing room, so it reads as a
+	// panel rather than a cramped column. A "view" title aligns it with the
+	// projects/contexts boxes beside it.
+	w := lipgloss.Width("view")
+	for _, r := range rows {
+		if lw := lipgloss.Width(r[0] + r[1]); lw > w {
 			w = lw
 		}
 	}
-	line := func(label, value string) string {
-		return lipgloss.NewStyle().Width(w).Render(m.styles.FilterTitle.Render(label) + m.styles.Insert.Render(value))
+	w += 3
+
+	var b strings.Builder
+	b.WriteString(m.styles.FilterTitle.Render("view"))
+	for _, r := range rows {
+		b.WriteByte('\n')
+		b.WriteString(lipgloss.NewStyle().Width(w).Render(m.styles.FilterTitle.Render(r[0]) + m.styles.Insert.Render(r[1])))
 	}
-	content := line("sort: ", sortLabel) + "\n" + line("done: ", doneLabel)
-	return m.styles.FilterBox.Height(contentH).Render(content)
+	return m.styles.FilterBox.Height(contentH).Render(b.String())
 }
 
 // renderFilterBox renders one header filter box: a dim title line followed by a
