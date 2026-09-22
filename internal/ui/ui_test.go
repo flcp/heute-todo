@@ -27,6 +27,8 @@ func enter() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyEnter} }
 
 func esc() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyEsc} }
 
+func tab() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyTab} }
+
 func step(m Model, msg tea.Msg) Model {
 	next, _ := m.Update(msg)
 	return next.(Model)
@@ -205,23 +207,26 @@ func TestAutosaveWritesFileOnAdd(t *testing.T) {
 	}
 }
 
-func TestEditWithAStartsAtEnd(t *testing.T) {
+func TestEditEntersAtTitleStart(t *testing.T) {
 	m := testModel(1) // "a"
 
-	m = step(m, key("a")) // edit, cursor at end
-	m = step(m, key("X")) // append -> "aX"
+	m = step(m, key("a")) // edit: cursor jumps to the title field
+	if m.editState.field != fieldTitle {
+		t.Fatalf("field = %d, want fieldTitle", m.editState.field)
+	}
+	m = step(m, key("X")) // insert at title start -> "Xa"
 	m = step(m, enter())
 
-	if m.todos[0].Description != "aX" {
-		t.Fatalf("desc = %q, want \"aX\"", m.todos[0].Description)
+	if m.todos[0].Description != "Xa" {
+		t.Fatalf("desc = %q, want \"Xa\"", m.todos[0].Description)
 	}
 }
 
-func TestEditWithIStartsAtFront(t *testing.T) {
+func TestEditWithIStartsAtTitle(t *testing.T) {
 	m := testModel(1) // "a"
 
-	m = step(m, key("i")) // edit, cursor at front
-	m = step(m, key("X")) // prepend -> "Xa"
+	m = step(m, key("i")) // edit: cursor jumps to the title field
+	m = step(m, key("X")) // insert at title start -> "Xa"
 	m = step(m, enter())
 
 	if m.todos[0].Description != "Xa" {
@@ -296,5 +301,117 @@ func TestDeleteLastItemClampsCursor(t *testing.T) {
 	}
 	if m.normalState.cursorPosition != 0 {
 		t.Fatalf("cursor = %d, want clamped to 0", m.normalState.cursorPosition)
+	}
+}
+
+func TestLocateFieldValueOffsets(t *testing.T) {
+	// (A) Buy milk +errands @home due:2026-10-10
+	//  ^1 ^4       ^13/14   ^22/23 ^28    ^32
+	const line = "(A) Buy milk +errands @home due:2026-10-10"
+	cases := []struct {
+		f   editField
+		pos int
+	}{
+		{fieldPriority, 1}, // the letter
+		{fieldTitle, 4},    // first title word
+		{fieldProject, 14}, // after '+'
+		{fieldContext, 23}, // after '@'
+		{fieldDue, 32},     // after "due:"
+	}
+	for _, c := range cases {
+		pos, ok := locateField(line, c.f)
+		if !ok || pos != c.pos {
+			t.Errorf("locateField(%d) = (%d,%v), want (%d,true)", c.f, pos, ok, c.pos)
+		}
+	}
+}
+
+func TestEnsureFieldScaffolds(t *testing.T) {
+	if v, pos := ensureField("Buy milk", fieldDue); v != "Buy milk due:" || pos != len([]rune(v)) {
+		t.Errorf("due scaffold = %q pos %d, want \"Buy milk due:\" pos %d", v, pos, len([]rune(v)))
+	}
+	if v, pos := ensureField("Buy milk", fieldPriority); v != "(A) Buy milk" || pos != 1 {
+		t.Errorf("priority scaffold = %q pos %d, want \"(A) Buy milk\" pos 1", v, pos)
+	}
+	if v, pos := ensureField("", fieldProject); v != "+" || pos != 1 {
+		t.Errorf("project scaffold on empty = %q pos %d, want \"+\" pos 1", v, pos)
+	}
+	// A present field is left untouched.
+	if v, _ := ensureField("Buy milk due:2026-10-10", fieldDue); v != "Buy milk due:2026-10-10" {
+		t.Errorf("present due mutated = %q", v)
+	}
+}
+
+func TestStripEmptyField(t *testing.T) {
+	if got := stripEmptyField("Buy milk due:", fieldDue); got != "Buy milk" {
+		t.Errorf("strip empty due = %q, want \"Buy milk\"", got)
+	}
+	if got := stripEmptyField("Buy milk +", fieldProject); got != "Buy milk" {
+		t.Errorf("strip empty project = %q, want \"Buy milk\"", got)
+	}
+	// A filled field is preserved.
+	if got := stripEmptyField("Buy milk due:2026-10-10", fieldDue); got != "Buy milk due:2026-10-10" {
+		t.Errorf("strip filled due = %q, want unchanged", got)
+	}
+}
+
+func TestTabCyclesFieldsAndJumpsCursor(t *testing.T) {
+	m := testModel(1)
+	todo, _ := todotxt.Parse("(A) Buy milk +errands @home due:2026-10-10")
+	m.todos[0] = todo
+
+	m = step(m, key("a"))
+	if m.editState.field != fieldTitle {
+		t.Fatalf("edit should start on fieldTitle, got %d", m.editState.field)
+	}
+	for _, want := range []editField{fieldPriority, fieldProject, fieldContext, fieldDue} {
+		m = step(m, tab())
+		if m.editState.field != want {
+			t.Fatalf("field = %d, want %d", m.editState.field, want)
+		}
+	}
+	if pos, _ := locateField(m.editState.input.Value(), fieldDue); m.editState.input.Position() != pos {
+		t.Fatalf("cursor = %d, want due value at %d", m.editState.input.Position(), pos)
+	}
+	m = step(m, tab()) // wraps back to the title
+	if m.editState.field != fieldTitle {
+		t.Fatalf("field = %d, want wrap to fieldTitle", m.editState.field)
+	}
+}
+
+func TestTabDropsEmptyScaffoldOnLeave(t *testing.T) {
+	m := testModel(1)
+	todo, _ := todotxt.Parse("Buy milk")
+	m.todos[0] = todo
+
+	m = step(m, key("a"))
+	m = step(m, tab()) // priority (A)
+	m = step(m, tab()) // project +
+	m = step(m, tab()) // context @
+	m = step(m, tab()) // due due:
+	if !strings.Contains(m.editState.input.Value(), "due:") {
+		t.Fatalf("expected due scaffold, got %q", m.editState.input.Value())
+	}
+	m = step(m, tab()) // leaving the empty due removes it
+	if strings.Contains(m.editState.input.Value(), "due:") {
+		t.Fatalf("empty due should be removed, got %q", m.editState.input.Value())
+	}
+}
+
+func TestCommitDropsEmptyScaffold(t *testing.T) {
+	m := testModel(0)
+	m = step(m, key("o"))
+	m = step(m, key("Buy milk"))
+	m = step(m, tab()) // priority
+	m = step(m, tab()) // project
+	m = step(m, tab()) // context
+	m = step(m, tab()) // due (empty scaffold)
+	m = step(m, enter())
+
+	if len(m.todos) != 1 {
+		t.Fatalf("len = %d, want 1", len(m.todos))
+	}
+	if m.todos[0].Description != "Buy milk" || m.todos[0].Priority != 'A' {
+		t.Fatalf("todo = %+v, want (A) \"Buy milk\" with no empty tags", m.todos[0])
 	}
 }

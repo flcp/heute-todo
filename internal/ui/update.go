@@ -60,13 +60,13 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.todos) == 0 {
 			return m, nil
 		}
-		cmd := m.enterEditMode(true)
+		cmd := m.enterEditMode()
 		return m, cmd
 	case "a":
 		if len(m.todos) == 0 {
 			return m, nil
 		}
-		cmd := m.enterEditMode(false)
+		cmd := m.enterEditMode()
 		return m, cmd
 	case " ":
 		if len(m.todos) == 0 {
@@ -109,12 +109,27 @@ func (m Model) updateInsertMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEsc:
 			m.exitInsert()
 			return m, nil
+		case tea.KeyTab, tea.KeyShiftTab:
+			m.tabToField(key.Type == tea.KeyTab)
+			return m, nil
 		}
 	}
 	// Forward typed characters and the cursor-blink tick to the text input.
 	var cmd tea.Cmd
 	m.editState.input, cmd = m.editState.input.Update(msg)
 	return m, cmd
+}
+
+// tabToField advances to the next (forward) or previous detail field: it first
+// drops an empty scaffold left behind on the current field, then scaffolds the
+// target field if absent and moves the input cursor into its value slot.
+func (m *Model) tabToField(forward bool) {
+	v := stripEmptyField(m.editState.input.Value(), m.editState.field)
+	next := advanceField(m.editState.field, forward)
+	v, pos := ensureField(v, next)
+	m.editState.input.SetValue(v)
+	m.editState.input.SetCursor(pos)
+	m.editState.field = next
 }
 
 // updateDeletePending handles the second keystroke of a dd delete: d confirms,
@@ -186,23 +201,22 @@ func (m *Model) enterAddMode(below bool) tea.Cmd {
 	m.mode = modeInsert
 	m.editState.isAddingItem = true
 	m.editState.insertAt = at
+	m.editState.field = fieldTitle
 	m.editState.input.Reset()
 	return m.editState.input.Focus()
 }
 
-// enterEditMode switches to insert mode to edit the selected todo. The input
-// cursor starts at the front of the line when cursorAtStart is true, otherwise
-// at the end.
-func (m *Model) enterEditMode(cursorAtStart bool) tea.Cmd {
+// enterEditMode switches to insert mode to edit the selected todo, starting on
+// the title field with the cursor at the title's value.
+func (m *Model) enterEditMode() tea.Cmd {
 	m.mode = modeInsert
 	m.editState.isAddingItem = false
+	m.editState.field = fieldTitle
 	currentTodo := m.todos[m.cursorSourceIndex()]
-	m.editState.input.SetValue(currentTodo.String())
-	if cursorAtStart {
-		m.editState.input.CursorStart()
-	} else {
-		m.editState.input.CursorEnd()
-	}
+	value := currentTodo.String()
+	m.editState.input.SetValue(value)
+	pos, _ := locateField(value, fieldTitle)
+	m.editState.input.SetCursor(pos)
 	return m.editState.input.Focus()
 }
 
@@ -232,7 +246,10 @@ func (m *Model) deleteSelected() tea.Cmd {
 
 // commit applies the input text as a new or edited todo. Blank input is ignored.
 func (m *Model) commit() {
-	newTodo, ok := todotxt.Parse(m.editState.input.Value())
+	// Drop an unfilled scaffold (e.g. a trailing "due:") left on the current
+	// field so it never persists.
+	value := stripEmptyField(m.editState.input.Value(), m.editState.field)
+	newTodo, ok := todotxt.Parse(value)
 	if !ok {
 		return
 	}
@@ -266,6 +283,7 @@ func (m *Model) commit() {
 // exitInsert returns to normal mode and clears the input.
 func (m *Model) exitInsert() {
 	m.mode = modeNormal
+	m.editState.field = fieldTitle
 	m.editState.input.Blur()
 	m.editState.input.Reset()
 }

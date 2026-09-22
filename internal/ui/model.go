@@ -22,10 +22,10 @@ const (
 type sortMode int
 
 const (
-	sortFree     sortMode = iota // file order
-	sortPriority                 // priority order (A first, unprioritized last)
-	sortName                     // alphabetical by description
-	sortModeCount                // sentinel: total number of sort modes
+	sortFree      sortMode = iota // file order
+	sortPriority                  // priority order (A first, unprioritized last)
+	sortName                      // alphabetical by description
+	sortModeCount                 // sentinel: total number of sort modes
 )
 
 // Model is the root Bubble Tea model.
@@ -51,11 +51,39 @@ type normalState struct {
 	pendingDelete  bool // armed by the first d of a dd delete
 }
 
+// editField identifies a field in the detail panel that edit mode can jump the
+// cursor to with Tab.
+type editField int
+
+const (
+	fieldTitle editField = iota
+	fieldPriority
+	fieldProject
+	fieldContext
+	fieldDue
+)
+
+// editFieldOrder is the Tab cycle through the detail panel's editable fields.
+// Created/Done dates are shown but are read-only and skipped.
+var editFieldOrder = []editField{fieldTitle, fieldPriority, fieldProject, fieldContext, fieldDue}
+
+// advanceField returns the field after (forward) or before f in editFieldOrder,
+// wrapping around the ends.
+func advanceField(f editField, forward bool) editField {
+	i := int(f)
+	n := len(editFieldOrder)
+	if forward {
+		return editFieldOrder[(i+1)%n]
+	}
+	return editFieldOrder[(i-1+n)%n]
+}
+
 // editState holds state used while adding or editing a todo in insert mode.
 type editState struct {
 	input        textinput.Model
-	insertAt     int  // index a newly added todo lands at
-	isAddingItem bool // add a new todo rather than replacing the selected one
+	insertAt     int       // index a newly added todo lands at
+	isAddingItem bool      // add a new todo rather than replacing the selected one
+	field        editField // field the Tab cursor currently targets
 }
 
 // New creates a Model backed by the todo.txt file at path, loading any existing

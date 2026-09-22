@@ -38,7 +38,12 @@ func (m Model) renderCommandLine() string {
 	var modeContent string
 	switch {
 	case m.mode == modeInsert:
-		modeContent = m.styles.Insert.Render("Add") + " " + m.editState.input.View()
+		label := "Add"
+		if !m.editState.isAddingItem {
+			label = "Edit"
+		}
+		hint := m.styles.Help.Render("  ·  ") + m.helpItem("⇥", "next field")
+		modeContent = m.styles.Insert.Render(label) + " " + m.editState.input.View() + hint
 	case m.normalState.pendingDelete:
 		modeContent = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
 	default:
@@ -86,40 +91,56 @@ func (m Model) renderCommandLine() string {
 }
 
 // renderDetail renders the side panel: a detail view of the todo currently
-// under the cursor, or a hint when the list is empty.
+// under the cursor, or a hint when the list is empty. While editing, it renders
+// the live edit buffer instead and highlights the field Tab currently targets.
 func (m Model) renderDetail() string {
-	if len(m.todos) == 0 || m.normalState.cursorPosition >= len(m.todos) {
-		return m.styles.Empty.Render("(no task selected)")
+	inserting := m.mode == modeInsert
+	var t todotxt.Todo
+	if inserting {
+		if parsed, ok := todotxt.Parse(m.editState.input.Value()); ok {
+			t = parsed
+		}
+	} else {
+		if len(m.todos) == 0 || m.normalState.cursorPosition >= len(m.todos) {
+			return m.styles.Empty.Render("(no task selected)")
+		}
+		t = m.todos[m.cursorSourceIndex()]
 	}
-	t := m.todos[m.cursorSourceIndex()]
+
+	active := func(f editField) bool { return inserting && m.editState.field == f }
 
 	var b strings.Builder
-	b.WriteString(m.styles.DetailTitle.Render(detailTitle(t)))
+	title := detailTitle(t)
+	if active(fieldTitle) {
+		b.WriteString(m.styles.Selected.Render(title))
+	} else {
+		b.WriteString(m.styles.DetailTitle.Render(title))
+	}
 	b.WriteString("\n\n")
 
 	priority := " "
 	if t.Priority >= 'A' && t.Priority <= 'Z' {
 		priority = string(t.Priority)
 	}
-	b.WriteString(m.detailField("Priority", priority))
+	b.WriteString(m.detailField("Priority", priority, active(fieldPriority)))
 
 	projects := " "
 	if len(t.Projects) > 0 {
 		projects = strings.Join(t.Projects, ", ")
 	}
-	b.WriteString(m.detailField("Project", projects))
+	b.WriteString(m.detailField("Project", projects, active(fieldProject)))
 
 	contexts := " "
 	if len(t.Contexts) > 0 {
 		contexts = strings.Join(t.Contexts, ", ")
 	}
-	b.WriteString(m.detailField("Context", contexts))
+	b.WriteString(m.detailField("Context", contexts, active(fieldContext)))
 
 	due := " "
 	if d, ok := t.Tags["due"]; ok {
 		due = formatDue(d, time.Now())
 	}
-	b.WriteString(m.detailField("Due date", due))
+	b.WriteString(m.detailField("Due date", due, active(fieldDue)))
 
 	if t.CreatedAt != nil {
 		b.WriteString(m.styles.DetailLabel.Render("Created:") + " " + m.styles.DateCreated.Render(t.CreatedAt.Format(todotxt.DateLayout)) + "\n")
@@ -132,8 +153,18 @@ func (m Model) renderDetail() string {
 }
 
 // detailField renders a single "Label: value" line, terminated by a newline.
-func (m Model) detailField(label, value string) string {
-	if strings.TrimSpace(value) == "" {
+// When active, the whole line is drawn in the inverse selection style to mark
+// the field Tab currently targets.
+func (m Model) detailField(label, value string, active bool) string {
+	empty := strings.TrimSpace(value) == ""
+	if active {
+		text := label + ": " + value
+		if empty {
+			text = label + ": —"
+		}
+		return m.styles.Selected.Render(text) + "\n"
+	}
+	if empty {
 		return m.styles.Empty.Render(label+": —") + "\n"
 	}
 	return m.styles.DetailLabel.Render(label+":") + " " + value + "\n"
