@@ -331,8 +331,8 @@ func TestEnsureFieldScaffolds(t *testing.T) {
 	if v, pos := ensureField("Buy milk", fieldDue); v != "Buy milk due:" || pos != len([]rune(v)) {
 		t.Errorf("due scaffold = %q pos %d, want \"Buy milk due:\" pos %d", v, pos, len([]rune(v)))
 	}
-	if v, pos := ensureField("Buy milk", fieldPriority); v != "(A) Buy milk" || pos != 1 {
-		t.Errorf("priority scaffold = %q pos %d, want \"(A) Buy milk\" pos 1", v, pos)
+	if v, pos := ensureField("Buy milk", fieldPriority); v != "() Buy milk" || pos != 1 {
+		t.Errorf("priority scaffold = %q pos %d, want \"() Buy milk\" pos 1", v, pos)
 	}
 	if v, pos := ensureField("", fieldProject); v != "+" || pos != 1 {
 		t.Errorf("project scaffold on empty = %q pos %d, want \"+\" pos 1", v, pos)
@@ -446,7 +446,7 @@ func TestTabDropsEmptyScaffoldOnLeave(t *testing.T) {
 	m.todos[0] = todo
 
 	m = step(m, key("a"))
-	m = step(m, tab()) // priority (A)
+	m = step(m, tab()) // priority ()
 	m = step(m, tab()) // project +
 	m = step(m, tab()) // context @
 	m = step(m, tab()) // due due:
@@ -472,8 +472,8 @@ func TestCommitDropsEmptyScaffold(t *testing.T) {
 	if len(m.todos) != 1 {
 		t.Fatalf("len = %d, want 1", len(m.todos))
 	}
-	if m.todos[0].Description != "Buy milk" || m.todos[0].Priority != 'A' {
-		t.Fatalf("todo = %+v, want (A) \"Buy milk\" with no empty tags", m.todos[0])
+	if m.todos[0].Description != "Buy milk" || m.todos[0].Priority != 0 {
+		t.Fatalf("todo = %+v, want \"Buy milk\" with no priority and no empty tags", m.todos[0])
 	}
 }
 

@@ -171,20 +171,20 @@ func appendScaffold(value, scaffold string) (string, int) {
 	return nv, len([]rune(nv))
 }
 
-// scaffoldPriority inserts an "(A)" priority after any leading completion
-// marker and returns the cursor on the priority letter.
+// scaffoldPriority inserts an "()" priority after any leading completion
+// marker and returns the cursor between the brackets.
 func scaffoldPriority(value string) (string, int) {
 	toks := scanTokens(value)
 	runes := []rune(value)
 	if len(toks) > 0 && toks[0].text == "x" {
 		left := string(runes[:toks[0].end])
 		right := string(runes[toks[0].end:])
-		return left + " (A)" + right, len([]rune(left)) + 2 // on the letter
+		return left + " ()" + right, len([]rune(left)) + 2 // between the brackets
 	}
 	if strings.TrimSpace(value) == "" {
-		return "(A)", 1
+		return "()", 1
 	}
-	return "(A) " + value, 1
+	return "() " + value, 1
 }
 
 // scaffoldDetails appends an empty details:"" tag and returns the cursor
