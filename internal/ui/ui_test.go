@@ -1,12 +1,14 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/flcp/heute-todo/internal/config"
 	"github.com/flcp/heute-todo/internal/todotxt"
@@ -669,6 +671,81 @@ func TestMoveInFileModeSkipsHiddenTasks(t *testing.T) {
 	}
 	if src := m.cursorSourceIndex(); m.todos[src].Description != "open one" {
 		t.Fatalf("cursor on %q, want cursor to follow \"open one\"", m.todos[src].Description)
+	}
+}
+
+func TestListScrollsToFitHeight(t *testing.T) {
+	todos := make([]todotxt.Todo, 50)
+	for i := range todos {
+		todos[i], _ = todotxt.Parse(fmt.Sprintf("task-%02d", i))
+	}
+	m := Model{todos: todos, editState: editState{input: newInput()}}
+	m.width = 80
+	m.height = 20
+
+	// With the cursor at the top the whole view must stay within the terminal
+	// height rather than overflowing off screen.
+	out := m.View()
+	if got := lipgloss.Height(out); got > m.height {
+		t.Fatalf("view height = %d, want <= %d", got, m.height)
+	}
+	if strings.Contains(out, "task-49") {
+		t.Fatal("task-49 should be scrolled out of view with cursor at top")
+	}
+
+	// Move the cursor to the last task; the list scrolls so it stays visible and
+	// the view still fits.
+	m.normalState.cursorPosition = len(todos) - 1
+	out = m.View()
+	if got := lipgloss.Height(out); got > m.height {
+		t.Fatalf("view height with cursor at bottom = %d, want <= %d", got, m.height)
+	}
+	if !strings.Contains(out, "task-49") {
+		t.Fatal("selected task-49 should be visible after scrolling to the bottom")
+	}
+	if strings.Contains(out, "task-00") {
+		t.Fatal("task-00 should be scrolled out of view with cursor at bottom")
+	}
+}
+
+func TestDetailClampsToFitHeight(t *testing.T) {
+	// A single task whose Details value wraps into many lines makes the detail
+	// panel the tallest half. It must clamp instead of pushing the header off.
+	long := strings.Repeat("word ", 60)
+	todo, _ := todotxt.Parse(`Buy milk +errands @home due:2026-10-10 details:"` + long + `"`)
+	m := Model{todos: []todotxt.Todo{todo}, editState: editState{input: newInput()}}
+	m.width = 80
+	m.height = 16
+
+	out := m.View()
+	if got := lipgloss.Height(out); got > m.height {
+		t.Fatalf("view height = %d, want <= %d", got, m.height)
+	}
+	if !strings.Contains(out, "Buy milk") {
+		t.Fatal("title should stay visible when the detail is clamped")
+	}
+
+	// In the extreme (a single row of space) only the title survives, dropping
+	// every field line below it.
+	body := m.renderBody(1)
+	if !strings.Contains(body, "Buy milk") {
+		t.Fatal("title should survive even at one row")
+	}
+	if strings.Contains(body, "Priority") {
+		t.Fatal("field lines should be dropped from the bottom at one row")
+	}
+}
+
+func TestClampLines(t *testing.T) {
+	s := "a\nb\nc\nd"
+	if got := clampLines(s, 2); got != "a\nb" {
+		t.Fatalf("clampLines(_, 2) = %q, want \"a\\nb\"", got)
+	}
+	if got := clampLines(s, 10); got != s {
+		t.Fatalf("clampLines(_, 10) = %q, want unchanged", got)
+	}
+	if got := clampLines(s, 0); got != s {
+		t.Fatalf("clampLines(_, 0) = %q, want unchanged", got)
 	}
 }
 

@@ -14,12 +14,28 @@ import (
 
 // View implements tea.Model.
 func (m Model) View() string {
-	top := m.renderHeader() + "\n\n" + m.renderBody()
+	header := m.renderHeader()
+	cmd := m.renderCommandLine()
+
+	// Cap the task list to whatever vertical space is left once the header, the
+	// command line, and the blank lines around the body are accounted for, so a
+	// long list scrolls internally instead of pushing them off screen. A zero or
+	// unknown height disables the cap and renders every row.
+	maxRows := 0
+	if m.height > 0 {
+		reserved := lipgloss.Height(header) + lipgloss.Height(cmd) + 2
+		if m.err != nil {
+			reserved += 2 // the "save failed" line plus its separating blank
+		}
+		if maxRows = m.height - reserved; maxRows < 1 {
+			maxRows = 1
+		}
+	}
+
+	top := header + "\n\n" + m.renderBody(maxRows)
 	if m.err != nil {
 		top += "\n\n" + m.styles.Err.Render(fmt.Sprintf("save failed: %v", m.err))
 	}
-
-	cmd := m.renderCommandLine()
 
 	// Pin the command line to the very bottom by padding the space between it
 	// and the content above when we know the terminal height.
@@ -243,8 +259,10 @@ func formatDue(due string, now time.Time) string {
 }
 
 // renderBody lays out the main area as two equal halves separated by a vertical
-// rule: the todo list on the left and an info panel on the right.
-func (m Model) renderBody() string {
+// rule: the todo list on the left and an info panel on the right. When maxRows
+// is positive the list is windowed to that many rows, scrolled to keep the
+// selected task visible; maxRows <= 0 renders every task.
+func (m Model) renderBody(maxRows int) string {
 	width := m.width
 	if width <= 0 {
 		width = 80
@@ -261,25 +279,35 @@ func (m Model) renderBody() string {
 		rightW = 10
 	}
 
+	indices := m.displayIndices()
+	start, end := 0, len(indices)
+	if maxRows > 0 {
+		start, end = scrollWindow(m.normalState.cursorPosition, len(indices), maxRows)
+	}
+
 	var list strings.Builder
 	if len(m.todos) == 0 {
 		list.WriteString(m.styles.Empty.Render("(no tasks yet)"))
 	}
 	contentW := leftW - 2 // TodoPanel has PaddingRight(2)
-	for dispIdx, srcIdx := range m.displayIndices() {
-		if dispIdx > 0 {
+	for pos := start; pos < end; pos++ {
+		if pos > start {
 			list.WriteByte('\n')
 		}
-		list.WriteString(m.renderRow(dispIdx, m.todos[srcIdx], contentW))
+		list.WriteString(m.renderRow(pos, m.todos[indices[pos]], contentW))
 	}
 
 	todosPanel := m.styles.TodoPanel.Width(leftW)
 	sidePanel := m.styles.SidePanel.Width(rightW)
 
-	detail := m.renderDetail()
-
 	left := todosPanel.Render(list.String())
-	right := sidePanel.Render(detail)
+	right := sidePanel.Render(m.renderDetail())
+	if maxRows > 0 {
+		// Drop detail lines from the bottom (after wrapping) so the panel can
+		// never outgrow the available height; in the extreme only the title
+		// survives, keeping the header on screen.
+		right = clampLines(right, maxRows)
+	}
 
 	// Match heights so the separator spans the taller half.
 	h := lipgloss.Height(left)
@@ -288,10 +316,22 @@ func (m Model) renderBody() string {
 	}
 
 	left = todosPanel.Height(h).Render(list.String())
-	right = sidePanel.Height(h).Render(detail)
 	sep := m.styles.Separator.Render(strings.TrimSuffix(strings.Repeat("│\n", h), "\n"))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, sep, right)
+}
+
+// clampLines keeps at most max lines of s, dropping any beyond that from the
+// bottom. A non-positive max returns s unchanged.
+func clampLines(s string, max int) string {
+	if max <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= max {
+		return s
+	}
+	return strings.Join(lines[:max], "\n")
 }
 
 // renderHeader lays out the top bar: the ASCII art logo on the left and the
@@ -384,17 +424,7 @@ func (m Model) renderFilterBox(title string, keys []string, cursor int, off map[
 	}
 
 	visible := contentH - 1 // the title takes one line
-	if visible < 1 {
-		visible = 1
-	}
-	start := 0
-	if cursor >= visible {
-		start = cursor - visible + 1
-	}
-	end := start + visible
-	if end > len(keys) {
-		end = len(keys)
-	}
+	start, end := scrollWindow(cursor, len(keys), visible)
 
 	var b strings.Builder
 	b.WriteString(m.styles.FilterTitle.Render(truncateRight(title, innerW)))
@@ -427,6 +457,33 @@ func (m Model) renderFilterBox(title string, keys []string, cursor int, off map[
 	// Rows are already padded to innerW, so let the box size to its content;
 	// setting an explicit Width here would fight the border/padding and wrap rows.
 	return style.Height(contentH).Render(b.String())
+}
+
+// scrollWindow returns the [start,end) range of `total` rows to display in a
+// viewport of `visible` rows, scrolled just enough to keep `cursor` in view.
+// When everything fits it returns the whole range.
+func scrollWindow(cursor, total, visible int) (start, end int) {
+	if visible < 1 {
+		visible = 1
+	}
+	if total <= visible {
+		return 0, total
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor > total-1 {
+		cursor = total - 1
+	}
+	if cursor >= visible {
+		start = cursor - visible + 1
+	}
+	end = start + visible
+	if end > total {
+		end = total
+		start = end - visible
+	}
+	return start, end
 }
 
 // Filter checkbox marks: a filled circle for a selected row, a hollow one for a
