@@ -647,6 +647,31 @@ func TestToggleHideDone(t *testing.T) {
 	}
 }
 
+func TestMoveInFileModeSkipsHiddenTasks(t *testing.T) {
+	// File-order (free) sort with a done task hidden between two open tasks:
+	// pressing J on the first open task must move it below the other open task,
+	// not swap it with the hidden done task sitting next in file order.
+	m := filterModel("open one", "x done two", "open three")
+	m = step(m, key("z")) // hide done
+	if got := m.visibleCount(); got != 2 {
+		t.Fatalf("visible = %d, want 2", got)
+	}
+
+	m = step(m, key("J")) // move "open one" down past "open three"
+
+	got := []string{}
+	for _, i := range m.displayIndices() {
+		got = append(got, m.todos[i].Description)
+	}
+	want := []string{"open three", "open one"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("visible order = %v, want %v", got, want)
+	}
+	if src := m.cursorSourceIndex(); m.todos[src].Description != "open one" {
+		t.Fatalf("cursor on %q, want cursor to follow \"open one\"", m.todos[src].Description)
+	}
+}
+
 func TestWithConfigAppliesPreferences(t *testing.T) {
 	m := testModel(0).WithConfig(config.Config{
 		Path: "/tmp/x.txt", Sort: "priority", ShowDone: false, Theme: "default",

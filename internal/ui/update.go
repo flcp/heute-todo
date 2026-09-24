@@ -356,16 +356,20 @@ func (m *Model) moveCursorRelative(delta int) {
 	}
 }
 
-// moveSelected swaps the selected todo with its neighbor in direction delta
-// (+1 = down, -1 = up), keeping the cursor on the moved item, and persists.
+// moveSelected swaps the selected todo with its visible neighbor in direction
+// delta (+1 = down, -1 = up), keeping the cursor on the moved item, and
+// persists. Cursor positions are display positions, so they are mapped back to
+// source indices to skip over any filtered-out todos.
 func (m *Model) moveSelected(delta int) tea.Cmd {
-	i := m.normalState.cursorPosition
-	j := i + delta
-	if j < 0 || j >= len(m.todos) {
+	indices := m.displayIndices()
+	from := m.normalState.cursorPosition
+	to := from + delta
+	if from < 0 || from >= len(indices) || to < 0 || to >= len(indices) {
 		return nil
 	}
+	i, j := indices[from], indices[to]
 	m.todos[i], m.todos[j] = m.todos[j], m.todos[i]
-	m.normalState.cursorPosition = j
+	m.normalState.cursorPosition = to
 	return m.saveCmd()
 }
 
