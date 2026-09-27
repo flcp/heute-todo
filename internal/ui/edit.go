@@ -135,6 +135,31 @@ func locateField(value string, f editField) (cursorPos int, present bool) {
 	return end, false
 }
 
+// titleEnd returns the rune index just past the last title word in value. When
+// the title is absent it falls back to the title's start position (from
+// locateField), so appending there still lands in a sensible spot.
+func titleEnd(value string) int {
+	info := classifyBuffer(value)
+	if info.title == -1 {
+		pos, _ := locateField(value, fieldTitle)
+		return pos
+	}
+	// The title is the run of plain (non-tag) words. Its end is the end of the
+	// last plain token before any trailing metadata token.
+	end := info.toks[info.title].end
+	for i := info.descStart; i < len(info.toks); i++ {
+		t := info.toks[i].text
+		isTag := (len(t) >= 1 && (t[0] == '+' || t[0] == '@')) ||
+			strings.HasPrefix(t, "due:") ||
+			strings.HasPrefix(t, "details:") ||
+			isKeyValue(t)
+		if !isTag {
+			end = info.toks[i].end
+		}
+	}
+	return end
+}
+
 // ensureField returns value (possibly with an inserted empty scaffold for a
 // missing field) and the rune index at which the field's value should be
 // edited. The title is never scaffolded.

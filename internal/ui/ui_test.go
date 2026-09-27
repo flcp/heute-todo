@@ -210,18 +210,35 @@ func TestAutosaveWritesFileOnAdd(t *testing.T) {
 	}
 }
 
-func TestEditEntersAtTitleStart(t *testing.T) {
+func TestEditWithAAppendsAtTitleEnd(t *testing.T) {
 	m := testModel(1) // "a"
 
-	m = step(m, key("a")) // edit: cursor jumps to the title field
+	m = step(m, key("a")) // edit: cursor jumps to the end of the title
 	if m.editState.field != fieldTitle {
 		t.Fatalf("field = %d, want fieldTitle", m.editState.field)
 	}
-	m = step(m, key("X")) // insert at title start -> "Xa"
+	m = step(m, key("X")) // append at title end -> "aX"
 	m = step(m, enter())
 
-	if m.todos[0].Description != "Xa" {
-		t.Fatalf("desc = %q, want \"Xa\"", m.todos[0].Description)
+	if m.todos[0].Description != "aX" {
+		t.Fatalf("desc = %q, want \"aX\"", m.todos[0].Description)
+	}
+}
+
+func TestEditWithAAppendsAfterMultiWordTitle(t *testing.T) {
+	m := testModel(1)
+	todo, _ := todotxt.Parse("(A) Buy milk +errands @home")
+	m.todos[0] = todo
+
+	m = step(m, key("a")) // cursor at the end of "Buy milk", before +errands
+	if pos, _ := locateField(m.editState.input.Value(), fieldTitle); m.editState.input.Position() <= pos {
+		t.Fatalf("cursor = %d, want past the title start %d", m.editState.input.Position(), pos)
+	}
+	m = step(m, key("!")) // -> "(A) Buy milk! +errands @home"
+	m = step(m, enter())
+
+	if m.todos[0].Description != "Buy milk! +errands @home" {
+		t.Fatalf("desc = %q, want \"Buy milk! +errands @home\"", m.todos[0].Description)
 	}
 }
 

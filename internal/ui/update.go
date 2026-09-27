@@ -77,11 +77,17 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.enterEditMode()
 		return m, cmd
-	case "a", "enter":
+	case "enter":
 		if len(m.todos) == 0 {
 			return m, nil
 		}
 		cmd := m.enterEditMode()
+		return m, cmd
+	case "a":
+		if len(m.todos) == 0 {
+			return m, nil
+		}
+		cmd := m.enterEditModeAtTitleEnd()
 		return m, cmd
 	case " ":
 		if len(m.todos) == 0 {
@@ -399,6 +405,20 @@ func (m *Model) enterEditMode() tea.Cmd {
 	m.editState.input.SetValue(value)
 	pos, _ := locateField(value, fieldTitle)
 	m.editState.input.SetCursor(pos)
+	return m.editState.input.Focus()
+}
+
+// enterEditModeAtTitleEnd switches to insert mode to edit the selected todo,
+// starting on the title field with the cursor at the end of the title (append),
+// mirroring vim's "a".
+func (m *Model) enterEditModeAtTitleEnd() tea.Cmd {
+	m.mode = modeInsert
+	m.editState.isAddingItem = false
+	m.editState.field = fieldTitle
+	currentTodo := m.todos[m.cursorSourceIndex()]
+	value := currentTodo.String()
+	m.editState.input.SetValue(value)
+	m.editState.input.SetCursor(titleEnd(value))
 	return m.editState.input.Focus()
 }
 
