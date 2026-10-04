@@ -308,7 +308,8 @@ func (m *Model) toggleFilterRow() {
 }
 
 // soloFilterRow selects only the row under the focused box's cursor, deselecting
-// every other row in that dimension. Toggling it again is left to the caller.
+// every other row in that dimension. When that row is already the sole
+// selection, it reselects every row instead, so ! toggles between solo and all.
 func (m *Model) soloFilterRow() {
 	keys := m.filterKeys()
 	cursor := *m.filterCursorPtr()
@@ -316,9 +317,11 @@ func (m *Model) soloFilterRow() {
 		return
 	}
 	off := map[string]bool{}
-	for _, k := range keys {
-		if k != keys[cursor] {
-			off[k] = true
+	if !m.isSoleSelection(keys, cursor) {
+		for _, k := range keys {
+			if k != keys[cursor] {
+				off[k] = true
+			}
 		}
 	}
 	if m.filter.focus == focusProjects {
@@ -332,6 +335,21 @@ func (m *Model) soloFilterRow() {
 		}
 		m.normalState.cursorPosition = last
 	}
+}
+
+// isSoleSelection reports whether the row at cursor is the only selected row in
+// the focused box: that row is selected and every other row is deselected.
+func (m Model) isSoleSelection(keys []string, cursor int) bool {
+	off := m.filter.offContexts
+	if m.filter.focus == focusProjects {
+		off = m.filter.offProjects
+	}
+	for i, k := range keys {
+		if selected := !off[k]; selected != (i == cursor) {
+			return false
+		}
+	}
+	return true
 }
 
 // cycleSortMode advances to the next sort mode, keeping the cursor on the same

@@ -613,6 +613,23 @@ func TestFilterSoloSelectsOnlyCursorRow(t *testing.T) {
 	}
 }
 
+func TestFilterSoloTogglesBackToAll(t *testing.T) {
+	m := filterModel("a +work", "b +home", "c +errands")
+	m = step(m, tab())    // focus projects; keys = ["", "errands", "home", "work"]
+	m = step(m, key("j")) // cursor on "errands"
+	m = step(m, key("!")) // solo: only errands
+	if m.visibleCount() != 1 {
+		t.Fatalf("visible = %d, want 1 after solo", m.visibleCount())
+	}
+	m = step(m, key("!")) // errands is sole selection, so reselect all
+	if len(m.filter.offProjects) != 0 {
+		t.Fatalf("offProjects = %v, want empty after toggling back", m.filter.offProjects)
+	}
+	if m.visibleCount() != 3 {
+		t.Fatalf("visible = %d, want 3 after toggling back to all", m.visibleCount())
+	}
+}
+
 func TestDigitToPriorityMiddleOfWindow(t *testing.T) {
 	// Digit 0's window is A–C, so it maps to the middle letter B (not A).
 	if got := digitToPriority(0); got != 'B' {
