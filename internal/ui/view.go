@@ -640,7 +640,7 @@ func (m Model) renderRow(i int, t todotxt.Todo, width int) string {
 		title = truncateRight(title, titleAvail)
 	}
 
-	if i == m.normalState.cursorPosition {
+	if i == m.normalState.cursorPosition && m.filter.focus == focusList {
 		var parts []string
 		if t.Done {
 			parts = []string{"✓", title}
