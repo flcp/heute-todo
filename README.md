@@ -7,13 +7,18 @@ A fast, vim-style terminal todo list that reads and writes the plain-text
 ## Install
 
 ```sh
-go install github.com/flcp/heute-todo@latest
+ln -sf "$HOME/go/bin/heute" "$HOME/.local/bin/heute" && \
+go install github.com/flcp/heute-todo/cmd/heute@latest
 ```
+
+The first command symlinks the binary into `~/.local/bin` (on your `PATH`);
+the second installs `heute` into `~/go/bin`, which the symlink points at. Run
+it again any time to upgrade.
 
 Or build from source:
 
 ```sh
-go build -o heute .
+go install ./cmd/heute
 ```
 
 ## Usage
@@ -38,6 +43,7 @@ visibility, and theme persist to `<os-config-dir>/heute/config.json`.
 | `0`–`9` | set priority (`0` clears) |
 | `J` / `K` | reorder the selected task (free sort), or move it down / up in priority — `J` lowers priority, `K` raises it (priority sort) |
 | `d` `d` | delete (press `d` twice to confirm) |
+| `u` / `ctrl+r` | undo / redo |
 | `s` | cycle sort mode |
 | `z` | show / hide completed tasks |
 | `tab` / `shift+tab` | focus the project / context filter |
@@ -45,3 +51,9 @@ visibility, and theme persist to `<os-config-dir>/heute/config.json`.
 
 In a filter box: `j`/`k` to move, `space` to toggle, `!` to isolate a single
 tag, `esc` to return to the list.
+
+# Developer Information
+## Run as dev
+```sh
+go run ./cmd/heute
+```
