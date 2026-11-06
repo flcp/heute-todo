@@ -660,6 +660,62 @@ func TestDigitKeySetsPriority(t *testing.T) {
 	}
 }
 
+func TestShiftJKAdjustsPriorityInPrioritySort(t *testing.T) {
+	m := filterModel("(G) write the report") // starts at digit 2
+	m.sort = sortPriority
+	if got := priorityToDigit(m.todos[0].Priority); got != 2 {
+		t.Fatalf("initial digit = %d, want 2 (letter G)", got)
+	}
+
+	// J moves the item down the list -> lower priority -> digit goes up: 2 -> 3.
+	next, cmd := m.Update(key("J"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("adjusting priority should trigger an autosave")
+	}
+	if got := priorityToDigit(m.todos[0].Priority); got != 3 {
+		t.Fatalf("after J digit = %d, want 3", got)
+	}
+
+	// K moves the item up the list -> higher priority -> digit goes down: 3 -> 2 (G).
+	m = step(m, key("K"))
+	if m.todos[0].Priority != 'G' {
+		t.Fatalf("after K priority = %q, want 'G' (digit 2)", m.todos[0].Priority)
+	}
+}
+
+func TestShiftJKPriorityClampsAtEnds(t *testing.T) {
+	m := filterModel("(G) write the report")
+	m.sort = sortPriority
+
+	// K raises priority repeatedly; the digit cannot drop below 0.
+	for i := 0; i < 5; i++ {
+		m = step(m, key("K"))
+	}
+	if got := priorityToDigit(m.todos[0].Priority); got != 0 {
+		t.Fatalf("after repeated K digit = %d, want clamped 0", got)
+	}
+
+	// J lowers priority repeatedly; the digit cannot rise above 9.
+	for i := 0; i < 15; i++ {
+		m = step(m, key("J"))
+	}
+	if got := priorityToDigit(m.todos[0].Priority); got != 9 {
+		t.Fatalf("after repeated J digit = %d, want clamped 9", got)
+	}
+}
+
+func TestShiftJKPriorityIgnoredInFreeSort(t *testing.T) {
+	// In free sort, J/K reorder rather than change priority.
+	m := filterModel("(G) first", "second")
+	m.sort = sortFree
+	m = step(m, key("J")) // move the selected task down
+	if m.todos[0].Description != "second" || m.todos[1].Description != "first" {
+		t.Fatalf("free-sort J should reorder, got %q then %q",
+			m.todos[0].Description, m.todos[1].Description)
+	}
+}
+
 func TestToggleHideDone(t *testing.T) {
 	m := filterModel("open one", "x done two", "open three")
 	if m.visibleCount() != 3 {

@@ -82,6 +82,9 @@ func (m Model) renderCommandLine() string {
 		if m.sort == sortFree {
 			nav = append(nav[:1], append([]string{m.helpItem("J/K", "move")}, nav[1:]...)...)
 		}
+		if m.sort == sortPriority {
+			nav = append(nav[:1], append([]string{m.helpItem("J/K", "priority")}, nav[1:]...)...)
+		}
 		act := []string{
 			m.helpItem("⎵ ", "done"),
 			//m.helpItem("o/O", "add"),

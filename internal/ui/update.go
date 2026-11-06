@@ -100,9 +100,17 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.moveSelected(1)
 			return m, cmd
 		}
+		if len(m.todos) > 0 && m.sort == sortPriority {
+			cmd := m.adjustPriority(1)
+			return m, cmd
+		}
 	case "K":
 		if len(m.todos) > 0 && m.sort == sortFree {
 			cmd := m.moveSelected(-1)
+			return m, cmd
+		}
+		if len(m.todos) > 0 && m.sort == sortPriority {
+			cmd := m.adjustPriority(-1)
 			return m, cmd
 		}
 	case "d":
@@ -447,6 +455,31 @@ func (m *Model) setPriority(p byte) tea.Cmd {
 	m.todos[i].Priority = p
 	m.normalState.cursorPosition = m.displayIndexOf(i)
 	return m.saveCmd()
+}
+
+// adjustPriority nudges the selected todo's displayed priority digit by delta
+// (clamped to 0–9), keeps the cursor on it after any re-sort, and persists. A
+// higher digit means lower priority (digit 0 / letter A is highest), so J (down)
+// uses delta +1 and K (up) uses delta -1. An unprioritized todo becomes digit 0
+// when nudged down the list (delta > 0) and stays unprioritized when nudged up.
+func (m *Model) adjustPriority(delta int) tea.Cmd {
+	i := m.cursorSourceIndex()
+	t := m.todos[i]
+	hasPriority := t.Priority >= 'A' && t.Priority <= 'Z'
+	if !hasPriority {
+		if delta <= 0 {
+			return nil
+		}
+		return m.setPriority(digitToPriority(0))
+	}
+	digit := priorityToDigit(t.Priority) + delta
+	if digit < 0 {
+		digit = 0
+	}
+	if digit > 9 {
+		digit = 9
+	}
+	return m.setPriority(digitToPriority(digit))
 }
 
 // toggleDone flips the done state of the selected todo (stamping or clearing the

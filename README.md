@@ -36,7 +36,7 @@ visibility, and theme persist to `<os-config-dir>/heute/config.json`.
 | `a` / `i` / `enter` | edit the selected task |
 | `space` | toggle done |
 | `0`–`9` | set priority (`0` clears) |
-| `J` / `K` | reorder the selected task (free sort only) |
+| `J` / `K` | reorder the selected task (free sort), or move it down / up in priority — `J` lowers priority, `K` raises it (priority sort) |
 | `d` `d` | delete (press `d` twice to confirm) |
 | `s` | cycle sort mode |
 | `z` | show / hide completed tasks |
