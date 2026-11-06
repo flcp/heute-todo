@@ -858,3 +858,101 @@ func TestWithConfigAppliesPreferences(t *testing.T) {
 		t.Fatalf("toConfig = %+v", got)
 	}
 }
+
+func ctrlR() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlR} }
+
+func descriptions(todos []todotxt.Todo) []string {
+	out := make([]string, len(todos))
+	for i, t := range todos {
+		out[i] = t.Description
+	}
+	return out
+}
+
+func TestUndoRestoresStateBeforeDelete(t *testing.T) {
+	m := testModel(3) // a, b, c
+
+	m = step(m, key("d"))
+	m = step(m, key("d")) // delete a
+	if got := descriptions(m.todos); len(got) != 2 || got[0] != "b" {
+		t.Fatalf("after delete, todos = %v, want [b c]", got)
+	}
+
+	next, cmd := m.Update(key("u"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("undo should trigger an autosave")
+	}
+	if got := descriptions(m.todos); len(got) != 3 || got[0] != "a" {
+		t.Fatalf("after undo, todos = %v, want [a b c]", got)
+	}
+}
+
+func TestUndoMultipleTraversesHistory(t *testing.T) {
+	m := testModel(1) // a
+
+	m = step(m, key(" ")) // toggle done on a
+	m = step(m, key("d")) // delete
+	m = step(m, key("d"))
+	if len(m.todos) != 0 {
+		t.Fatalf("after delete, todos = %v, want empty", descriptions(m.todos))
+	}
+
+	m = step(m, key("u")) // undo delete -> [a done]
+	if len(m.todos) != 1 || !m.todos[0].Done {
+		t.Fatalf("after first undo, todos = %+v, want [a done]", m.todos)
+	}
+
+	m = step(m, key("u")) // undo toggle -> [a not done]
+	if len(m.todos) != 1 || m.todos[0].Done {
+		t.Fatalf("after second undo, todos = %+v, want [a not done]", m.todos)
+	}
+}
+
+func TestRedoReappliesUndoneChange(t *testing.T) {
+	m := testModel(2) // a, b
+
+	m = step(m, key("d"))
+	m = step(m, key("d")) // delete a -> [b]
+	m = step(m, key("u")) // undo -> [a b]
+	if got := descriptions(m.todos); len(got) != 2 {
+		t.Fatalf("after undo, todos = %v, want [a b]", got)
+	}
+
+	next, cmd := m.Update(ctrlR()) // redo -> [b]
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("redo should trigger an autosave")
+	}
+	if got := descriptions(m.todos); len(got) != 1 || got[0] != "b" {
+		t.Fatalf("after redo, todos = %v, want [b]", got)
+	}
+}
+
+func TestChangeAfterUndoClearsRedo(t *testing.T) {
+	m := testModel(2) // a, b
+
+	m = step(m, key("d"))
+	m = step(m, key("d"))  // delete a -> [b]
+	m = step(m, key("u"))  // undo -> [a b], redo now holds [b]
+	m = step(m, key(" "))  // fresh change: toggle a -> clears redo
+	m = step(m, ctrlR())   // redo should be a no-op now
+	if got := descriptions(m.todos); len(got) != 2 {
+		t.Fatalf("redo after a fresh change should do nothing, todos = %v", got)
+	}
+	if !m.todos[0].Done {
+		t.Fatal("the fresh toggle change should still stand after a no-op redo")
+	}
+}
+
+func TestUndoWithNoHistoryIsNoop(t *testing.T) {
+	m := testModel(2)
+	next, cmd := m.Update(key("u"))
+	m = next.(Model)
+	if cmd != nil {
+		t.Fatal("undo with empty history should not autosave")
+	}
+	if len(m.todos) != 2 {
+		t.Fatalf("todos should be unchanged, got %v", descriptions(m.todos))
+	}
+}

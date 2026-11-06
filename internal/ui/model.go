@@ -49,7 +49,18 @@ type Model struct {
 
 	styles Styles // active theme's rendered styles
 
+	undo undoState // undo/redo history of the todo list
+
 	err error // last autosave error, shown in the footer
+}
+
+// undoState holds the todo-list history. undo stacks hold past states (most
+// recent on top); redo stacks hold states undone away (ready to reapply). Any
+// fresh change clears redo, so forward history is severed once you edit after
+// undoing.
+type undoState struct {
+	undoStack [][]todotxt.Todo
+	redoStack [][]todotxt.Todo
 }
 
 // normalState holds state used while navigating in normal mode.

@@ -49,6 +49,10 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
+	case "u":
+		return m, m.undoChange()
+	case "ctrl+r":
+		return m, m.redoChange()
 	case "j", "down":
 		m.moveCursorRelative(1)
 	case "k", "up":
@@ -400,6 +404,7 @@ func (m *Model) moveSelected(delta int) tea.Cmd {
 		return nil
 	}
 	i, j := indices[from], indices[to]
+	m.recordUndo()
 	m.todos[i], m.todos[j] = m.todos[j], m.todos[i]
 	m.normalState.cursorPosition = to
 	return m.saveCmd()
@@ -452,6 +457,7 @@ func (m *Model) enterEditModeAtTitleEnd() tea.Cmd {
 // it after any re-sort, and persists.
 func (m *Model) setPriority(p byte) tea.Cmd {
 	i := m.cursorSourceIndex()
+	m.recordUndo()
 	m.todos[i].Priority = p
 	m.normalState.cursorPosition = m.displayIndexOf(i)
 	return m.saveCmd()
@@ -486,6 +492,7 @@ func (m *Model) adjustPriority(delta int) tea.Cmd {
 // completion date) and persists the change.
 func (m *Model) toggleDone() tea.Cmd {
 	i := m.cursorSourceIndex()
+	m.recordUndo()
 	m.todos[i] = m.todos[i].Toggled(time.Now())
 	m.normalState.cursorPosition = m.displayIndexOf(i)
 	return m.saveCmd()
@@ -496,6 +503,7 @@ func (m *Model) toggleDone() tea.Cmd {
 func (m *Model) deleteSelected() tea.Cmd {
 	m.normalState.pendingDelete = false
 	i := m.cursorSourceIndex()
+	m.recordUndo()
 	m.todos = append(m.todos[:i], m.todos[i+1:]...)
 	if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
 		m.normalState.cursorPosition = last
@@ -515,6 +523,8 @@ func (m *Model) commit() {
 	if !ok {
 		return
 	}
+
+	m.recordUndo()
 
 	var index int
 	if m.editState.isAddingItem {
@@ -548,6 +558,63 @@ func (m *Model) exitInsert() {
 	m.editState.field = fieldTitle
 	m.editState.input.Blur()
 	m.editState.input.Reset()
+}
+
+// snapshotTodos returns a copy of the todo slice suitable for the undo history.
+// A shallow copy is enough: mutations replace whole Todo values rather than
+// mutating a Todo's inner slices in place, so stored snapshots stay intact.
+func (m Model) snapshotTodos() []todotxt.Todo {
+	snap := make([]todotxt.Todo, len(m.todos))
+	copy(snap, m.todos)
+	return snap
+}
+
+// recordUndo pushes the current todo state onto the undo stack and clears the
+// redo stack. Call it just before applying a mutation; clearing redo severs any
+// forward history once a fresh change is made after undoing.
+func (m *Model) recordUndo() {
+	m.undo.undoStack = append(m.undo.undoStack, m.snapshotTodos())
+	m.undo.redoStack = nil
+}
+
+// undoChange restores the most recent pre-change state, moving the current state
+// onto the redo stack so it can be reapplied. It is a no-op when there is
+// nothing to undo.
+func (m *Model) undoChange() tea.Cmd {
+	last := len(m.undo.undoStack) - 1
+	if last < 0 {
+		return nil
+	}
+	m.undo.redoStack = append(m.undo.redoStack, m.snapshotTodos())
+	m.todos = m.undo.undoStack[last]
+	m.undo.undoStack = m.undo.undoStack[:last]
+	m.clampCursor()
+	return m.saveCmd()
+}
+
+// redoChange reapplies the most recently undone state, moving the current state
+// back onto the undo stack. It is a no-op when there is nothing to redo.
+func (m *Model) redoChange() tea.Cmd {
+	last := len(m.undo.redoStack) - 1
+	if last < 0 {
+		return nil
+	}
+	m.undo.undoStack = append(m.undo.undoStack, m.snapshotTodos())
+	m.todos = m.undo.redoStack[last]
+	m.undo.redoStack = m.undo.redoStack[:last]
+	m.clampCursor()
+	return m.saveCmd()
+}
+
+// clampCursor keeps the list cursor within the visible todo bounds after the
+// list changes size (e.g. an undo that restores or drops todos).
+func (m *Model) clampCursor() {
+	if last := m.visibleCount() - 1; m.normalState.cursorPosition > last {
+		m.normalState.cursorPosition = last
+	}
+	if m.normalState.cursorPosition < 0 {
+		m.normalState.cursorPosition = 0
+	}
 }
 
 // savedMsg reports the result of an autosave.

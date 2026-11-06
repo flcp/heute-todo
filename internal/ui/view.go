@@ -93,6 +93,8 @@ func (m Model) renderCommandLine() string {
 			m.helpItem("a", "edit"),
 			m.helpItem("0-9", "priority"),
 			m.helpItem("d", "delete"),
+			m.helpItem("u", "undo"),
+			m.helpItem("^r", "redo"),
 		}
 		misc := []string{
 			m.helpItem("⇥", "filter"),
