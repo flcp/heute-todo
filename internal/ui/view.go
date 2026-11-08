@@ -73,6 +73,9 @@ func (m Model) renderCommandLine() string {
 		modeContent = m.styles.Insert.Render(label) + " " + m.editState.input.View() + hint
 	case m.normalState.pendingDelete:
 		modeContent = m.styles.Delete.Render("delete? press d to confirm, esc to cancel")
+	case m.search.typing:
+		hint := m.styles.Help.Render("  ·  ") + m.helpItem("↵", "list") + "  " + m.helpItem("esc", "clear")
+		modeContent = m.styles.Insert.Render("search") + " " + m.search.input.View() + hint
 	default:
 		nav := []string{
 			m.helpItem("j/k", "navigate"),
@@ -98,6 +101,7 @@ func (m Model) renderCommandLine() string {
 		}
 		misc := []string{
 			m.helpItem("⇥", "filter"),
+			m.helpItem("/", "search"),
 			m.helpItem("s", "sort"),
 			m.helpItem("z", "done"),
 			m.helpItem("q", "quit"),
@@ -105,6 +109,12 @@ func (m Model) renderCommandLine() string {
 		sep := m.styles.Help.Render("  ·  ")
 		join := func(items []string) string { return strings.Join(items, "  ") }
 		modeContent = join(nav) + sep + join(act) + sep + join(misc)
+		if m.searchActive() {
+			chip := m.styles.Insert.Render("search:") + " " +
+				m.styles.RowMeta.Render(strconv.Quote(m.search.input.Value())) +
+				m.styles.Help.Render(" (esc clears)")
+			modeContent = chip + sep + modeContent
+		}
 	}
 
 	width := m.width

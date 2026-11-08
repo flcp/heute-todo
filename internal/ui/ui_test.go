@@ -19,7 +19,7 @@ func testModel(n int) Model {
 	for i := range todos {
 		todos[i] = todotxt.Todo{Description: string(rune('a' + i))}
 	}
-	return Model{todos: todos, editState: editState{input: newInput()}}
+	return Model{todos: todos, editState: editState{input: newInput()}, search: searchState{input: newSearchInput()}}
 }
 
 func key(s string) tea.KeyMsg {
@@ -31,6 +31,8 @@ func enter() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyEnter} }
 func esc() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyEsc} }
 
 func tab() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyTab} }
+
+func slash() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")} }
 
 func step(m Model, msg tea.Msg) Model {
 	next, _ := m.Update(msg)
@@ -501,7 +503,7 @@ func filterModel(lines ...string) Model {
 	for i, l := range lines {
 		todos[i], _ = todotxt.Parse(l)
 	}
-	return Model{todos: todos, editState: editState{input: newInput()}}
+	return Model{todos: todos, editState: editState{input: newInput()}, search: searchState{input: newSearchInput()}}
 }
 
 func TestFilterDeselectProjectHidesMatching(t *testing.T) {
@@ -769,7 +771,7 @@ func TestListScrollsToFitHeight(t *testing.T) {
 	for i := range todos {
 		todos[i], _ = todotxt.Parse(fmt.Sprintf("task-%02d", i))
 	}
-	m := Model{todos: todos, editState: editState{input: newInput()}}
+	m := Model{todos: todos, editState: editState{input: newInput()}, search: searchState{input: newSearchInput()}}
 	m.width = 80
 	m.height = 20
 
@@ -803,7 +805,7 @@ func TestDetailClampsToFitHeight(t *testing.T) {
 	// panel the tallest half. It must clamp instead of pushing the header off.
 	long := strings.Repeat("word ", 60)
 	todo, _ := todotxt.Parse(`Buy milk +errands @home due:2026-10-10 details:"` + long + `"`)
-	m := Model{todos: []todotxt.Todo{todo}, editState: editState{input: newInput()}}
+	m := Model{todos: []todotxt.Todo{todo}, editState: editState{input: newInput()}, search: searchState{input: newSearchInput()}}
 	m.width = 80
 	m.height = 16
 
@@ -933,10 +935,10 @@ func TestChangeAfterUndoClearsRedo(t *testing.T) {
 	m := testModel(2) // a, b
 
 	m = step(m, key("d"))
-	m = step(m, key("d"))  // delete a -> [b]
-	m = step(m, key("u"))  // undo -> [a b], redo now holds [b]
-	m = step(m, key(" "))  // fresh change: toggle a -> clears redo
-	m = step(m, ctrlR())   // redo should be a no-op now
+	m = step(m, key("d")) // delete a -> [b]
+	m = step(m, key("u")) // undo -> [a b], redo now holds [b]
+	m = step(m, key(" ")) // fresh change: toggle a -> clears redo
+	m = step(m, ctrlR())  // redo should be a no-op now
 	if got := descriptions(m.todos); len(got) != 2 {
 		t.Fatalf("redo after a fresh change should do nothing, todos = %v", got)
 	}
@@ -954,5 +956,122 @@ func TestUndoWithNoHistoryIsNoop(t *testing.T) {
 	}
 	if len(m.todos) != 2 {
 		t.Fatalf("todos should be unchanged, got %v", descriptions(m.todos))
+	}
+}
+
+// typeStr feeds s to the model one rune at a time as key messages.
+func typeStr(m Model, s string) Model {
+	for _, r := range s {
+		m = step(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	return m
+}
+
+func TestMatchesSearchFragments(t *testing.T) {
+	todo, _ := todotxt.Parse("test one two")
+	cases := []struct {
+		query string
+		want  bool
+	}{
+		{"", true},
+		{"test", true},
+		{"te two", true},    // each fragment is searched independently
+		{"two te", true},    // order does not matter
+		{"TEST", true},      // case-insensitive
+		{"te three", false}, // every fragment must match
+		{"xyz", false},
+	}
+	for _, c := range cases {
+		if got := matchesSearch(todo, c.query); got != c.want {
+			t.Errorf("matchesSearch(%q) = %v, want %v", c.query, got, c.want)
+		}
+	}
+}
+
+func TestSearchSpansEveryField(t *testing.T) {
+	todo, _ := todotxt.Parse("(A) call bob +work @office due:2026-09-20")
+	for _, frag := range []string{"call", "work", "office", "2026-09-20", "A"} {
+		if !matchesSearch(todo, frag) {
+			t.Errorf("fragment %q should match somewhere in the serialized line", frag)
+		}
+	}
+}
+
+func TestSearchLiveFiltersList(t *testing.T) {
+	m := filterModel("buy milk", "call bob", "buy bread")
+
+	m = step(m, slash())
+	if !m.search.typing {
+		t.Fatal("/ should start search typing")
+	}
+	m = typeStr(m, "buy")
+	if got := m.visibleCount(); got != 2 {
+		t.Fatalf("visible after 'buy' = %d, want 2", got)
+	}
+	m = typeStr(m, " bread")
+	if got := m.visibleCount(); got != 1 {
+		t.Fatalf("visible after 'buy bread' = %d, want 1", got)
+	}
+}
+
+func TestSearchEnterKeepsQueryAndReturnsToList(t *testing.T) {
+	m := filterModel("buy milk", "call bob", "buy bread")
+
+	m = step(m, slash())
+	m = typeStr(m, "call")
+	m = step(m, enter())
+	if m.search.typing {
+		t.Fatal("enter should stop typing")
+	}
+	if !m.searchActive() {
+		t.Fatal("query should stay active after enter")
+	}
+	if got := m.visibleCount(); got != 1 {
+		t.Fatalf("visible after enter = %d, want 1", got)
+	}
+	// Normal navigation keys should now reach the list, not the search bar.
+	m = step(m, key("j"))
+}
+
+func TestSearchEscClearsButLeavesFilters(t *testing.T) {
+	m := filterModel("buy milk +home", "call bob +work")
+
+	// Deselect the +work project so a filter is already active.
+	m.filter.offProjects = map[string]bool{"work": true}
+	if got := m.visibleCount(); got != 1 {
+		t.Fatalf("visible with work filtered = %d, want 1", got)
+	}
+
+	m = step(m, slash())
+	m = typeStr(m, "zzz")
+	if got := m.visibleCount(); got != 0 {
+		t.Fatalf("visible with non-matching search = %d, want 0", got)
+	}
+	m = step(m, esc())
+	if m.searchActive() {
+		t.Fatal("esc should clear the query")
+	}
+	// The project filter must survive the search being cleared.
+	if !m.filter.offProjects["work"] {
+		t.Fatal("esc on search must not touch project filters")
+	}
+	if got := m.visibleCount(); got != 1 {
+		t.Fatalf("visible after clearing search = %d, want 1 (filter still active)", got)
+	}
+}
+
+func TestSearchReopenPrefillsPreviousQuery(t *testing.T) {
+	m := filterModel("buy milk", "call bob")
+
+	m = step(m, slash())
+	m = typeStr(m, "buy")
+	m = step(m, enter()) // query frozen, cursor back to list
+
+	m = step(m, slash()) // reopen
+	if got := m.search.input.Value(); got != "buy" {
+		t.Fatalf("reopened search value = %q, want \"buy\"", got)
+	}
+	if got := m.search.input.Position(); got != len("buy") {
+		t.Fatalf("cursor position = %d, want %d (end of text)", got, len("buy"))
 	}
 }

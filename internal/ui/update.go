@@ -33,6 +33,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.normalState.pendingDelete {
 			return m.updateDeletePending(msg)
 		}
+		if m.search.typing {
+			return m.updateSearchMode(msg)
+		}
 		if m.filter.focus != focusList {
 			return m.updateFilterMode(msg)
 		}
@@ -49,6 +52,11 @@ func (m Model) updateNormalMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
+	case "/":
+		return m, m.enterSearchMode()
+	case "esc":
+		m.clearSearch()
+		return m, nil
 	case "u":
 		return m, m.undoChange()
 	case "ctrl+r":
@@ -197,6 +205,57 @@ func (m Model) updateDeletePending(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.normalState.pendingDelete = false
 		return m, nil
 	}
+}
+
+// enterSearchMode focuses the search bar for typing. The previous query (if
+// any) is kept and the cursor is placed at its end, so reopening search resumes
+// where the last one left off.
+func (m *Model) enterSearchMode() tea.Cmd {
+	m.search.typing = true
+	m.search.input.CursorEnd()
+	return m.search.input.Focus()
+}
+
+// updateSearchMode handles input while the search bar has focus: Enter returns
+// the cursor to the list while keeping the query active, Esc clears the search,
+// and any other key edits the query and re-filters the list live.
+func (m Model) updateSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.Type {
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+		case tea.KeyEnter:
+			m.search.typing = false
+			m.search.input.Blur()
+			m.clampCursor()
+			return m, nil
+		case tea.KeyEsc:
+			m.clearSearch()
+			return m, nil
+		}
+	}
+	src := m.cursorSourceIndex()
+	var cmd tea.Cmd
+	m.search.input, cmd = m.search.input.Update(msg)
+	// Keep the cursor on the same todo when it survives the narrowed result.
+	m.normalState.cursorPosition = m.displayIndexOf(src)
+	m.clampCursor()
+	return m, cmd
+}
+
+// clearSearch drops the query entirely and returns focus to the list, leaving
+// the project/context filters untouched. The cursor stays on its current todo
+// where that todo is still visible.
+func (m *Model) clearSearch() {
+	src := m.cursorSourceIndex()
+	hadTodos := len(m.todos) > 0
+	m.search.typing = false
+	m.search.input.Blur()
+	m.search.input.Reset()
+	if hadTodos {
+		m.normalState.cursorPosition = m.displayIndexOf(src)
+	}
+	m.clampCursor()
 }
 
 // updateFilterMode handles input while a header filter box has focus: j/k move

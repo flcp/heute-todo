@@ -4,6 +4,7 @@ package ui
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,6 +44,7 @@ type Model struct {
 	normalState normalState
 	editState   editState
 	filter      filterState
+	search      searchState
 
 	theme   string // active palette name, persisted to config
 	cfgPath string // todo path recorded in the config (the remembered default)
@@ -90,6 +92,17 @@ type filterState struct {
 	offProjects   map[string]bool
 	offContexts   map[string]bool
 	hideDone      bool // hide completed tasks from the list
+}
+
+// searchState holds the free-text search. The input's value is the query; it is
+// kept even after the cursor returns to the list (Enter), so the filter stays
+// applied and reopening search (/) prefills the previous text. typing reports
+// whether the search bar currently has focus. Escape clears the query entirely.
+// The search filter is independent of the project/context filter: opening,
+// typing, or clearing a search never touches the filter selections.
+type searchState struct {
+	input  textinput.Model
+	typing bool
 }
 
 // editField identifies a field in the detail panel that edit mode can jump the
@@ -141,6 +154,7 @@ func New(path string) (Model, error) {
 		todos:     todos,
 		theme:     DefaultTheme,
 		editState: editState{input: newInput()},
+		search:    searchState{input: newSearchInput()},
 		styles:    buildStylesWithPalette(paletteFor(DefaultTheme)),
 	}, nil
 }
@@ -204,6 +218,14 @@ func newInput() textinput.Model {
 	return ti
 }
 
+// newSearchInput builds the textinput used for the / free-text search.
+func newSearchInput() textinput.Model {
+	ti := textinput.New()
+	ti.Prompt = "/"
+	ti.Placeholder = "search…"
+	return ti
+}
+
 // displayIndices returns a slice mapping display-position → m.todos index, in
 // the active sort order and with the project/context filter applied.
 func (m Model) displayIndices() []int {
@@ -220,12 +242,38 @@ func (m Model) displayIndices() []int {
 		}
 	}
 	filtered := order[:0:0]
+	query := m.search.input.Value()
 	for _, i := range order {
-		if m.passesFilter(m.todos[i]) {
+		if m.passesFilter(m.todos[i]) && matchesSearch(m.todos[i], query) {
 			filtered = append(filtered, i)
 		}
 	}
 	return filtered
+}
+
+// searchActive reports whether a non-empty search query is currently narrowing
+// the list.
+func (m Model) searchActive() bool {
+	return strings.TrimSpace(m.search.input.Value()) != ""
+}
+
+// matchesSearch reports whether t matches query. The query is split on spaces
+// into fragments; the todo matches only when its full serialized line (every
+// field: completion, priority, dates, description with +projects, @contexts and
+// key:value tags) contains every fragment, case-insensitively. An empty query
+// matches everything.
+func matchesSearch(t todotxt.Todo, query string) bool {
+	fragments := strings.Fields(query)
+	if len(fragments) == 0 {
+		return true
+	}
+	hay := strings.ToLower(t.String())
+	for _, frag := range fragments {
+		if !strings.Contains(hay, strings.ToLower(frag)) {
+			return false
+		}
+	}
+	return true
 }
 
 // visibleCount is the number of todos currently shown after filtering.

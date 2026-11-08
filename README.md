@@ -24,8 +24,8 @@ go install ./cmd/heute
 ## Usage
 
 ```sh
-heute            # open the default todo.txt
-heute path.txt   # open a specific file (and remember it as the default)
+heute                   # open your todo file (the saved path, or todo.txt)
+heute --set-path path.txt   # set and remember the todo file to open
 ```
 
 Autosaves changes on every edit. The file path, sort mode,
@@ -47,10 +47,17 @@ visibility, and theme persist to `<os-config-dir>/heute/config.json`.
 | `s` | cycle sort mode |
 | `z` | show / hide completed tasks |
 | `tab` / `shift+tab` | focus the project / context filter |
+| `/` | search tasks (see below) |
 | `q` | quit |
 
 In a filter box: `j`/`k` to move, `space` to toggle, `!` to isolate a single
 tag, `esc` to return to the list.
+
+## Search
+
+The search query is split
+on spaces and each word is matched individually.
+So `write boss` matches `write email to boss`.
 
 # Developer Information
 ## Run as dev
